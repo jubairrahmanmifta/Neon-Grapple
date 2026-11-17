@@ -16,6 +16,19 @@ export const CONFIG = Object.freeze({
     maxUpdatesPerFrame: 5,
   },
 
+  // --- Stage 1: auto-runner tuning -----------------------------------------
+
+  /** Constant rightward run speed, in pixels per second. */
+  playerSpeed: 300,
+  /** Downward acceleration, in pixels per second squared. */
+  gravity: 1500,
+  /** Upward velocity applied by a jump, in pixels per second (negative = up). */
+  jumpForce: -600,
+  /** World-space Y of the ground surface; the player's feet rest here. */
+  groundY: 500,
+  /** Pixels from the left edge where the camera holds the player on screen. */
+  cameraOffsetX: 300,
+
   render: {
     /** Backing-store pixel-ratio cap. Keeps high-DPI phones at a sane cost. */
     maxDPR: 2,
@@ -24,26 +37,6 @@ export const CONFIG = Object.freeze({
       display: '"Arial Black", "Segoe UI", system-ui, -apple-system, sans-serif',
       mono: 'ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace',
     },
-  },
-
-  title: {
-    text: 'NEON GRAPPLE',
-    weight: 900,
-    /** Base size = clamp(min(width * widthRatio, height * heightRatio), min, max). */
-    size: {
-      widthRatio: 0.11,
-      heightRatio: 0.2,
-      min: 30,
-      max: 132,
-    },
-    /** Long titles shrink to fit within this share of the viewport width. */
-    maxWidthRatio: 0.86,
-    gradient: ['#54f6ff', '#9b6bff', '#ff3fd0'],
-    glowColor: '#7b5cff',
-    glowBlur: 26,
-    pulseHz: 0.35,
-    /** Opacity swing of the cached title glow (0 = static, 1 = full fade). */
-    pulseAlpha: 0.12,
   },
 
   hud: {

@@ -1,6 +1,8 @@
 import { CONFIG } from './config.js';
 import { createLoop } from './loop.js';
-import { clamp } from './utils.js';
+import { Player } from './player.js';
+import { Camera } from './camera.js';
+import { World } from './world.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d', { alpha: false });
@@ -22,26 +24,16 @@ const view = {
 };
 
 const state = {
-  prevTime: 0,
-  time: 0,
   fps: CONFIG.loop.updatesPerSecond,
   fpsFrames: 0,
   fpsElapsed: 0,
 };
 
-/**
- * Rasterising big blurred text every frame is wasteful. The title and its glow
- * are cached in an offscreen canvas at backing-store resolution and rebuilt only
- * when the viewport changes. The pulse is just a subtle opacity animation.
- */
-const titleLayer = {
-  canvas: document.createElement('canvas'),
-  dirty: true,
-  x: 0,
-  y: 0,
-  width: 0,
-  height: 0,
-};
+const player = new Player();
+const camera = new Camera(player.x);
+const world = new World();
+
+const JUMP_KEYS = new Set(['Space', 'KeyW', 'ArrowUp']);
 
 /**
  * Matches the canvas backing store to its CSS size at the current (capped) DPR.
@@ -61,7 +53,6 @@ function syncCanvasSize() {
   view.scaleX = pixelWidth / cssWidth;
   view.scaleY = pixelHeight / cssHeight;
   view.rawDPR = rawDPR;
-  titleLayer.dirty = true;
 
   if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
     canvas.width = pixelWidth;
@@ -70,81 +61,21 @@ function syncCanvasSize() {
 }
 
 function update(step) {
-  state.prevTime = state.time;
-  state.time += step;
+  player.update(step);
+  camera.update(player.x);
 }
 
-function titleFont(size) {
-  return `${CONFIG.title.weight} ${size}px ${CONFIG.render.fonts.display}`;
+function onKeyDown(event) {
+  if (!JUMP_KEYS.has(event.code)) return;
+  // Stop Space/ArrowUp from scrolling or activating focused controls.
+  if (event.code === 'Space' || event.code === 'ArrowUp') event.preventDefault();
+  if (event.repeat) return;
+  player.jump();
 }
 
-function buildTitleLayer() {
-  const cfg = CONFIG.title;
-  const { width, height } = view;
-  const base = Math.min(width * cfg.size.widthRatio, height * cfg.size.heightRatio);
-  let fontSize = clamp(base, cfg.size.min, cfg.size.max);
-
-  ctx.font = titleFont(fontSize);
-  let textWidth = ctx.measureText(cfg.text).width;
-  const maxWidth = width * cfg.maxWidthRatio;
-  if (textWidth > maxWidth) {
-    fontSize *= maxWidth / textWidth;
-    ctx.font = titleFont(fontSize);
-    textWidth = ctx.measureText(cfg.text).width;
-  }
-
-  const padding = cfg.glowBlur * 2;
-  const cssWidth = textWidth + padding * 2;
-  const cssHeight = fontSize * 1.3 + padding * 2;
-  const scale = Math.max(0.1, view.scaleX);
-  const layer = titleLayer.canvas;
-
-  layer.width = Math.max(1, Math.ceil(cssWidth * scale));
-  layer.height = Math.max(1, Math.ceil(cssHeight * scale));
-
-  const layerCtx = layer.getContext('2d');
-  layerCtx.setTransform(scale, 0, 0, scale, 0, 0);
-  layerCtx.textAlign = 'center';
-  layerCtx.textBaseline = 'middle';
-  layerCtx.font = titleFont(fontSize);
-
-  const x = cssWidth / 2;
-  const y = cssHeight / 2;
-  const gradient = layerCtx.createLinearGradient(x - textWidth / 2, y, x + textWidth / 2, y);
-  cfg.gradient.forEach((color, index) => {
-    gradient.addColorStop(index / (cfg.gradient.length - 1), color);
-  });
-
-  layerCtx.fillStyle = gradient;
-  layerCtx.shadowColor = cfg.glowColor;
-  layerCtx.shadowBlur = cfg.glowBlur;
-  layerCtx.fillText(cfg.text, x, y);
-  layerCtx.shadowBlur = cfg.glowBlur * 0.35;
-  layerCtx.fillText(cfg.text, x, y);
-
-  titleLayer.x = (width - cssWidth) / 2;
-  titleLayer.y = (height - cssHeight) / 2;
-  titleLayer.width = cssWidth;
-  titleLayer.height = cssHeight;
-  titleLayer.dirty = false;
-}
-
-function drawTitle(time) {
-  if (titleLayer.dirty) buildTitleLayer();
-
-  const cfg = CONFIG.title;
-  const wave = 0.5 + 0.5 * Math.sin(time * Math.PI * 2 * cfg.pulseHz);
-
-  ctx.save();
-  ctx.globalAlpha = 1 - cfg.pulseAlpha + cfg.pulseAlpha * wave;
-  ctx.drawImage(
-    titleLayer.canvas,
-    titleLayer.x,
-    titleLayer.y,
-    titleLayer.width,
-    titleLayer.height,
-  );
-  ctx.restore();
+function onPointerDown(event) {
+  if (event.button !== 0) return;
+  player.jump();
 }
 
 function drawFps() {
@@ -178,11 +109,19 @@ function render(alpha, frameDelta) {
   ctx.fillStyle = CONFIG.render.background;
   ctx.fillRect(0, 0, view.width, view.height);
 
-  // Logic runs at a fixed rate, so interpolate the visual clock for smooth glow.
-  const visualTime = state.prevTime + (state.time - state.prevTime) * alpha;
-  drawTitle(visualTime);
+  // World and player share one camera translation; the HUD stays in screen space.
+  const cameraX = camera.renderX(alpha);
+  ctx.save();
+  ctx.translate(-cameraX, 0);
+  world.render(ctx, cameraX, view);
+  player.render(ctx, alpha);
+  ctx.restore();
+
   drawFps();
 }
+
+window.addEventListener('keydown', onKeyDown);
+window.addEventListener('pointerdown', onPointerDown);
 
 const loop = createLoop({ update, render });
 

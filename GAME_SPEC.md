@@ -1,6 +1,6 @@
 # NEON GRAPPLE — Game Specification
 
-**Status:** Stage 0 — Scaffold
+**Status:** Stage 1 — Player auto-runner, camera, placeholder art
 **Platform:** CrazyGames (HTML5, desktop + mobile web)
 **Genre:** One-button grapple-swing endless runner
 
@@ -47,6 +47,9 @@ higher multiplier, and a better score.
 
 The game must be fully playable with one finger and one input at a time.
 
+**Stage 1 placeholder:** Space / W / Up Arrow / left click triggers a jump. This
+binding moves to the grapple in Stage 2.
+
 ### Scoring model (target)
 
 - **Distance:** points per meter travelled, growing with speed.
@@ -60,74 +63,23 @@ The game must be fully playable with one finger and one input at a time.
 
 ## 2. Stage Roadmap
 
-Each stage must ship a playable, bug-free build and leave the previous stage's
-behavior intact.
+Stage 0: Scaffold (Done)
 
-### Stage 0 — Scaffold ✅
+Stage 1: Player auto-runner, camera, placeholder art (Current)
 
-Fullscreen Canvas 2D page, config module, fixed-timestep loop, math utilities,
-placeholder title and live FPS HUD, project documentation.
-**Done when:** page loads with no console errors, FPS is stable, and resizing
-keeps the canvas sharp without scrollbars.
+Stage 2: Grapple + swing physics
 
-### Stage 1 — Player & Grapple Prototype
+Stage 3: Procedural chunks: rooftops, gaps, anchors
 
-Player body with gravity, input handling, target selection among nearby anchors,
-pendulum/tether constraint, swing release with preserved momentum, and a basic
-follow camera. Temporary flat-colour debug world.
-**Done when:** a player can chain several swings in an empty test level and the
-motion feels smooth and predictable.
+Stage 4: Collision, death, score, combo, HUD
 
-### Stage 2 — Procedural City & Camera
+Stage 5: Juice: particles, shake, trails, slow-mo
 
-Layered procedural skyline (fog/parallax), generated anchor points, building
-geometry, endless recycling, and a deadzone camera that leads the player.
-**Done when:** flying in one direction for several minutes never reveals an edge,
-a repeated layout, or a hitch while new chunks spawn.
+Stage 6: Save/load, bolts, unlocks, missions, daily seed
 
-### Stage 3 — Hazards & Run Lifecycle
+Stage 7: CrazyGames SDK: rewarded revive, ads, leaderboard
 
-Hazard shapes (rooftops, signs, drones, beams), collision detection, death,
-run start/restart flow, and a minimal HUD. No meta-progression yet.
-**Done when:** collisions are fair and readable, and restart is instant.
-
-### Stage 4 — Momentum, Near-Miss & Scoring
-
-Distance and speed scoring, near-miss detection, combo timer/multiplier, score
-popups, best-score persistence, and a results screen.
-**Done when:** skilled play visibly produces a higher multiplier and score, and
-the combo window feels earned rather than random.
-
-### Stage 5 — Game Feel & Visual Polish
-
-Swing trails, tether glow, particle bursts, speed lines, screen shake, hit-stop,
-parallax tuning, and layered Canvas 2D bloom effects (no WebGL).
-**Done when:** the game reads clearly at full speed and every input has immediate
-visual feedback, with frame time still inside budget.
-
-### Stage 6 — Audio & Accessibility
-
-Procedural WebAudio music and SFX (tether, release, near-miss, crash), volume and
-mute controls, reduced-motion mode, colour-blind-safe accent variants, pause and
-focus handling, and full keyboard navigation.
-**Done when:** the game is playable muted, playable with reduced motion, and all
-audio can be muted in one action.
-
-### Stage 7 — Mobile, Performance & UX
-
-Touch tuning, safe-area-aware HUD, responsive layout from portrait phones to
-ultrawide desktop, adaptive quality, visibility pause, and a performance pass
-against mid-range mobile hardware.
-**Done when:** a steady 60 FPS (or a graceful 30 FPS fallback) on target devices,
-with no layout breakage across orientations.
-
-### Stage 8 — CrazyGames Integration & Release
-
-CrazyGames SDK integration (loading state, ads where appropriate, cloud/local
-save, mute hooks) behind a guarded adapter, QA matrix across browsers/devices,
-store assets and description, and final submission build.
-**Done when:** the build passes CrazyGames requirements and runs correctly both
-inside the portal and locally without the SDK present.
+Stage 8: Mobile touch, perf, QA, ship build
 
 ---
 
@@ -155,20 +107,20 @@ inside the portal and locally without the SDK present.
 
 ```
 index.html          fullscreen canvas + page CSS
-src/main.js         bootstrap, viewport/DPR handling, placeholder render
+src/main.js         bootstrap, viewport/DPR handling, input, system wiring
 src/config.js       all tunable constants (single exported object)
 src/loop.js         fixed-timestep loop + interpolated render
 src/utils.js        clamp, lerp, rand, AABB helpers
+src/player.js       auto-runner state, gravity, jump, placeholder art
+src/camera.js       horizontal follow camera
+src/world.js        placeholder ground plane and scrolling markers
 ```
 
 Planned additions (introduced only when their stage begins):
 
 ```
 src/input.js        unified one-button input (keyboard/mouse/touch)
-src/player.js       player state and motion
 src/grapple.js      anchor selection, tether constraint, release
-src/world.js        chunk generation and recycling
-src/camera.js       follow/deadzone camera and shake
 src/scoring.js      distance, near-miss, combo, persistence
 src/audio.js        procedural WebAudio
 src/platform.js     guarded CrazyGames SDK adapter
@@ -193,3 +145,19 @@ Gameplay systems should receive explicit dependencies rather than reading global
   The title + glow are cached in an offscreen layer and only rebuilt on resize,
   keeping per-frame drawing cheap.
 - No gameplay, input, audio, or persistence yet.
+
+### Stage 1 — Player auto-runner, camera, placeholder art — 2026-11-17
+
+- Added `src/player.js`: 30×50 player body with constant rightward auto-run,
+  gravity, ground clamping, and a grounded-only jump.
+- Added `src/camera.js`: horizontal follow camera that holds the player
+  `cameraOffsetX` pixels from the left edge, with interpolated rendering.
+- Added `src/world.js`: dark purple ground plane at `groundY` with scrolling
+  marker lines every 100 px (every 5th marker taller/brighter) and a neon rim.
+- Wired jump input in `src/main.js` for Space, W, Up Arrow, and left click, with
+  key-repeat suppression and default-scroll prevention.
+- Rendered the player as a glowing cyan rectangle with a magenta facing marker.
+- Removed the centered title and its cached render layer; kept the live FPS HUD.
+- Added `playerSpeed`, `gravity`, `jumpForce`, `groundY`, and `cameraOffsetX` to
+  `CONFIG`.
+- No grappling, collision, scoring, audio, or persistence yet.
