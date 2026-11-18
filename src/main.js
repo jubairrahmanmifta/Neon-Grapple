@@ -5,6 +5,7 @@ import { Camera } from './camera.js';
 import { World } from './world.js';
 import { Grapple } from './grapple.js';
 import { HUD } from './hud.js';
+import { ParticleSystem } from './particles.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d', { alpha: false });
@@ -36,9 +37,13 @@ const camera = new Camera(player.x, player.centerY, view.height);
 const world = new World();
 const grapple = new Grapple();
 const hud = new HUD();
+const particles = new ParticleSystem();
 
 /** 'PLAYING' simulates the run; 'GAMEOVER' freezes it until a restart. */
 let gameState = 'PLAYING';
+
+/** Tracks the airborne-to-grounded transition so landings fire juice once. */
+let wasGrounded = true;
 
 /**
  * One-button input. Any supported source starts a grapple, any release ends it.
@@ -72,14 +77,27 @@ function syncCanvasSize() {
 }
 
 function update(step) {
+  // Particles keep settling on the game-over screen; only the shake decays.
+  particles.update(step);
+
   // The world is frozen on the game-over screen: no physics, no streaming.
-  if (gameState !== 'PLAYING') return;
+  if (gameState !== 'PLAYING') {
+    camera.updateShake(step);
+    return;
+  }
 
   // Gravity and velocity integrate while playing; the tether only redirects
   // that motion, so momentum survives the swing. Rooftops catch the player
   // from above and re-apply the auto-run speed.
   player.update(step, world.platforms);
   if (grapple.isAttached) grapple.update(player, step);
+
+  // A touchdown is an impact: kick up dust at the player's feet.
+  if (!wasGrounded && player.isGrounded) {
+    camera.shake(5);
+    particles.emit(player.centerX, player.y + player.height, 10, '#ff2fd0', 240);
+  }
+  wasGrounded = player.isGrounded;
 
   // Falling past the death plane ends the run and drops the tether.
   if (player.y > CONFIG.deathY) {
@@ -96,7 +114,12 @@ function update(step) {
 function beginGrapple() {
   if (gameState !== 'PLAYING' || inputActive) return;
   inputActive = true;
-  if (grapple.fire(player, world.anchors)) player.registerSwing();
+  if (grapple.fire(player, world.anchors)) {
+    player.registerSwing();
+    // The tether biting the anchor: impact shake + cyan sparks at the puck.
+    camera.shake(10);
+    particles.emit(grapple.anchor.x, grapple.anchor.y, 15, '#35f6ff', 340);
+  }
 }
 
 function endGrapple() {
@@ -108,6 +131,7 @@ function endGrapple() {
 /** Wipes the run and snaps the camera back to the spawn point. */
 function restart() {
   inputActive = false;
+  wasGrounded = true;
   player.reset();
   camera.reset(player.x, player.centerY, view.height);
   world.reset(camera.x);
@@ -167,17 +191,20 @@ function render(alpha, frameDelta) {
   ctx.fillStyle = CONFIG.render.background;
   ctx.fillRect(0, 0, view.width, view.height);
 
-  // World and player share one camera translation; the HUD stays in screen space.
+  // World, particles, tether, and player share one camera translation; the
+  // shake offset comes from camera.renderX/renderY, and the HUD stays fixed.
   const cameraX = camera.renderX(alpha);
   const cameraY = camera.renderY(alpha);
   ctx.save();
   ctx.translate(-cameraX, -cameraY);
   world.render(ctx, cameraX, cameraY, view);
+  particles.render(ctx);
   grapple.render(ctx, player, alpha);
   player.render(ctx, alpha);
   ctx.restore();
 
-  // HUD lives in screen space so it never scrolls or zooms with the camera.
+  // HUD lives in screen space: reset to the DPR transform so it never shakes.
+  ctx.setTransform(view.scaleX, 0, 0, view.scaleY, 0, 0);
   hud.draw(ctx, player, view.width, view.height, gameState === 'GAMEOVER');
   hud.drawFps(ctx, state.fps, view.width);
 }

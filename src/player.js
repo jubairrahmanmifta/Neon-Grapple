@@ -1,16 +1,15 @@
 import { CONFIG } from './config.js';
 import { lerp } from './utils.js';
 
+/** Number of ghost samples kept behind the player. */
+const TRAIL_SAMPLES = 10;
+
 /**
  * The auto-running, swinging player.
  *
  * `x`/`y` are the top-left corner of an axis-aligned rectangle in world space.
- * The player always pushes forward, gravity pulls it down, and the tether
- * redirects that motion into a swing. Rooftops passed in by the world catch the
- * body from above and re-establish the auto-run.
- *
- * `prevX`/`prevY` hold the previous logic step so the renderer can interpolate
- * between fixed updates and stay smooth on high-refresh displays.
+ * `prevX`/`prevY` hold the previous step so rendering can interpolate between
+ * fixed updates. Rooftops catch the body from above and restore the auto-run.
  */
 export class Player {
   constructor(x = CONFIG.spawnX, y = CONFIG.spawnY) {
@@ -26,6 +25,13 @@ export class Player {
     this.bestStreak = 0;
     this.prevX = this.x;
     this.prevY = this.y;
+    // Pre-allocated ring buffer so the update loop never allocates.
+    this.trail = [];
+    for (let i = 0; i < TRAIL_SAMPLES; i += 1) {
+      this.trail.push({ x: this.x, y: this.y, angle: 0 });
+    }
+    this.trailCursor = 0;
+    this.trailFilled = 0;
   }
 
   /** Returns the player to its spawn state and clears the current run's score. */
@@ -39,6 +45,18 @@ export class Player {
     this.streak = 0;
     this.prevX = this.x;
     this.prevY = this.y;
+    this.resetTrail();
+  }
+
+  /** Refills the trail with the current position so a new run starts clean. */
+  resetTrail() {
+    for (const sample of this.trail) {
+      sample.x = this.x;
+      sample.y = this.y;
+      sample.angle = 0;
+    }
+    this.trailCursor = 0;
+    this.trailFilled = 0;
   }
 
   /** Centre X in world space; the tether attaches here, not the top-left. */
@@ -51,12 +69,12 @@ export class Player {
     return this.y + this.height / 2;
   }
 
-  /**
-   * Integrates one fixed step and resolves rooftop landings.
-   *
-   * @param {number} dt
-   * @param {ReadonlyArray<{ x: number, y: number, width: number }>} platforms
-   */
+  /** Body tilt in radians, derived from the current velocity direction. */
+  get angle() {
+    return Math.atan2(this.vy, this.vx);
+  }
+
+  /** Integrates one fixed step and resolves rooftop landings. */
   update(dt, platforms = []) {
     this.prevX = this.x;
     this.prevY = this.y;
@@ -76,23 +94,28 @@ export class Player {
 
     // Score only ever climbs: it tracks the furthest point reached this run.
     this.score = Math.max(this.score, Math.floor(this.x * CONFIG.scoreDistanceMultiplier));
+
+    this.recordTrail();
   }
 
-  /**
-   * Counts a successful attach while airborne. Chaining swings without touching
-   * a rooftop is what builds the streak; landing clears it again.
-   */
+  /** Stores the current position and tilt in the ghost-trail ring buffer. */
+  recordTrail() {
+    const sample = this.trail[this.trailCursor];
+    sample.x = this.x;
+    sample.y = this.y;
+    sample.angle = this.angle;
+    this.trailCursor = (this.trailCursor + 1) % TRAIL_SAMPLES;
+    if (this.trailFilled < TRAIL_SAMPLES) this.trailFilled += 1;
+  }
+
+  /** Counts a successful airborne attach; touching a rooftop clears the chain. */
   registerSwing() {
     if (this.isGrounded) return;
     this.streak += 1;
     if (this.streak > this.bestStreak) this.bestStreak = this.streak;
   }
 
-  /**
-   * Lands on the highest rooftop whose surface the player crossed downwards
-   * this step. Platforms are one-way for now: the player can swing up through
-   * them, but cannot fall through a surface from above.
-   */
+  /** Lands on the highest rooftop crossed downwards this step (one-way). */
   resolveRooftop(platforms) {
     this.isGrounded = false;
     if (this.vy < 0) return;
@@ -120,16 +143,9 @@ export class Player {
   }
 
   /**
-   * Pulls the player onto the circle of `ropeLength` around `anchor` and keeps
-   * the velocity tangential so the tether can never be stretched indefinitely.
-   *
-   * The position correction is softened by `ropeConstraintDamping`, leaving a
-   * sliver of stretch each step. That tiny give is what makes the rope feel
-   * springy instead of like a rigid steel rod.
-   *
-   * @param {{ x: number, y: number }} anchor
-   * @param {number} ropeLength
-   * @param {number} [damping] fraction of the overstretch corrected this step
+   * Pulls the player onto the tether circle and keeps velocity tangential.
+   * `damping` leaves a sliver of elastic stretch each step, so the rope springs
+   * instead of behaving like a rigid steel rod.
    */
   applyGrappleConstraint(anchor, ropeLength, damping = CONFIG.ropeConstraintDamping) {
     const dx = this.centerX - anchor.x;
@@ -167,20 +183,46 @@ export class Player {
     return lerp(this.prevY, this.y, alpha);
   }
 
-  /** Placeholder art: a cyan body with a magenta facing marker on the front. */
+  /** Faint, shrinking cyan ghosts tracing the last ten fixed steps. */
+  renderTrail(ctx) {
+    const length = this.trail.length;
+    for (let i = 0; i < this.trailFilled; i += 1) {
+      const index = (this.trailCursor - this.trailFilled + i + length) % length;
+      const sample = this.trail[index];
+      // Oldest sample is faintest; the newest sits just under the body.
+      const fade = (i + 1) / this.trailFilled;
+      const scale = 0.55 + fade * 0.35;
+      const w = this.width * scale;
+      const h = this.height * scale;
+
+      ctx.save();
+      ctx.globalAlpha = 0.04 + fade * 0.14;
+      ctx.fillStyle = '#35f6ff';
+      ctx.translate(sample.x + this.width / 2, sample.y + this.height / 2);
+      ctx.rotate(sample.angle);
+      ctx.fillRect(-w / 2, -h / 2, w, h);
+      ctx.restore();
+    }
+  }
+
+  /** Placeholder art: a cyan body that tilts with velocity, plus its trail. */
   render(ctx, alpha) {
+    this.renderTrail(ctx);
+
     const x = this.renderX(alpha);
     const y = this.renderY(alpha);
 
     ctx.save();
+    ctx.translate(x + this.width / 2, y + this.height / 2);
+    ctx.rotate(this.angle);
     ctx.shadowColor = 'rgba(53, 246, 255, 0.7)';
     ctx.shadowBlur = 14;
     ctx.fillStyle = '#35f6ff';
-    ctx.fillRect(x, y, this.width, this.height);
+    ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
 
     ctx.shadowBlur = 0;
     ctx.fillStyle = '#ff2fd0';
-    ctx.fillRect(x + this.width - 8, y + 16, 8, 18);
+    ctx.fillRect(this.width / 2 - 8, -this.height / 2 + 16, 8, 18);
     ctx.restore();
   }
 }

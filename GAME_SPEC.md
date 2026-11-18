@@ -1,6 +1,10 @@
 # NEON GRAPPLE — Game Specification
 
-**Status:** Stage 4 — Death, restart, score, combo, HUD
+**Status:** Stage 5 — Game juice (particles, shake, trails)
+
+**Stage 5 controls:** same as Stage 4 — Space / left mouse / touch fires and
+holds the tether, releasing detaches, and Space or click restarts after death.
+The new visuals are feedback only: no gameplay physics was changed.
 **Platform:** CrazyGames (HTML5, desktop + mobile web)
 **Genre:** One-button grapple-swing endless runner
 
@@ -74,9 +78,9 @@ Stage 2: Grapple + swing physics (Done)
 
 Stage 3: Procedural chunks: rooftops, gaps, anchors (Done)
 
-Stage 4: Collision, death, score, combo, HUD (Current)
+Stage 4: Collision, death, score, combo, HUD (Done)
 
-Stage 5: Juice: particles, shake, trails, slow-mo
+Stage 5: Juice: particles, shake, trails, slow-mo (Current)
 
 Stage 6: Save/load, bolts, unlocks, missions, daily seed
 
@@ -119,6 +123,7 @@ src/camera.js       X-locked follow camera with slow eased vertical follow
 src/world.js        procedural rooftops, gaps, and gap anchors
 src/grapple.js      anchor selection, tether constraint, release boost
 src/hud.js          screen-space score, streak, and game-over overlay
+src/particles.js    burst particles with gravity and glow
 ```
 
 Planned additions (introduced only when their stage begins):
@@ -259,3 +264,43 @@ Gameplay systems should receive explicit dependencies rather than reading global
   the console stays empty.
 - Hazard collisions are still absent; falling below `deathY` is the only way to
   lose a run. Audio, persistence, and mobile polish remain in later stages.
+
+### Stage 5 — Game juice — 2026-11-18
+
+- Added `src/particles.js`: `ParticleSystem` owns an array of plain particles
+  (`x`, `y`, `vx`, `vy`, `life`, `maxLife`, `color`, `size`). `emit(x, y, count,
+  color, speed)` sprays particles in all directions with random life, size, and
+  launch speed; `update(dt)` integrates velocity and gravity and compacts the
+  array in place to drop dead particles without allocating; `render(ctx)` draws
+  one glowing, life-faded circle per particle.
+- Added `shakeIntensity`/`shakeDecay` to `Camera`, plus `shake(amount)` and
+  `updateShake(dt)`. The shake fades linearly at `shakeDecay` units per second;
+  `renderX()`/`renderY()` add a random offset bounded by the current intensity,
+  so the offset applies to the interpolated camera used for the world only.
+  `reset()` clears any lingering shake when a run restarts.
+- `main.js` now owns a `ParticleSystem` and an airborne-to-grounded transition
+  flag. A successful tether attach calls `camera.shake(10)` and emits 15 cyan
+  sparks at the anchor; a rooftop touchdown calls `camera.shake(5)` and emits
+  10 magenta dust particles at the player's feet. Particles update every step
+  (they settle even on the game-over screen), and shake decays while the rest
+  of the simulation is frozen.
+- `Player.render()` now translates to the body centre and rotates by
+  `atan2(vy, vx)`, so the rectangle tips forward while falling and backward
+  while rising. A preallocated ten-sample ring buffer records each step's
+  position and tilt; the renderer draws those samples as smaller, translucent
+  cyan ghosts behind the body. `reset()` clears the trail.
+- Particles render inside the shaken world transform between the world and the
+  player, so sparks and dust line up with the neon city. The HUD is drawn after
+  an explicit `setTransform(...)` back to the DPR-only transform, keeping the
+  score, streak, and game-over text perfectly still during a shake.
+- Added `shakeDecay` and `particleGravity` to `CONFIG`; no physics constants
+  (`gravity`, `runSpeed`, rope behaviour, death plane, scoring) were changed.
+- Verified with 40 Node assertions covering particle motion/decay/removal,
+  shake amplitude/decay/reset, trail capacity/angles/reset, and ghost rendering,
+  plus a headless Chrome run at 1280×581 that instrumented canvas calls. The
+  attach produced a camera-translation jitter spike and cyan circles at anchor
+  height, landing produced magenta circles at rooftop height, eleven cyan rects
+  (body + ten ghosts) rendered per frame, HUD text kept a zero translation
+  throughout the shake, and the console stayed empty.
+- Slow-mo, audio, hazards, persistence, and mobile polish remain for later
+  stages; this stage is purely visual feedback.

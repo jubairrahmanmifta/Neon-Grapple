@@ -1,5 +1,5 @@
 import { CONFIG } from './config.js';
-import { lerp } from './utils.js';
+import { lerp, rand } from './utils.js';
 
 /**
  * Follow camera.
@@ -18,6 +18,8 @@ export class Camera {
     this.prevX = 0;
     this.y = 0;
     this.prevY = 0;
+    this.shakeIntensity = 0;
+    this.shakeDecay = CONFIG.shakeDecay;
     if (targetX !== undefined) this.snapTo(targetX, targetY, viewHeight);
   }
 
@@ -32,6 +34,12 @@ export class Camera {
   /** Snaps back onto the player immediately, used when a run restarts. */
   reset(targetX, targetY, viewHeight) {
     this.snapTo(targetX, targetY, viewHeight);
+    this.shakeIntensity = 0;
+  }
+
+  /** Starts a screen shake with the given pixel amplitude. */
+  shake(amount) {
+    this.shakeIntensity = amount;
   }
 
   update(targetX, targetY, viewHeight, dt) {
@@ -43,6 +51,13 @@ export class Camera {
     const target = this.targetY(targetY, viewHeight);
     const follow = 1 - Math.exp(-CONFIG.cameraFollowRate * dt);
     this.y += (target - this.y) * follow;
+
+    this.updateShake(dt);
+  }
+
+  /** Fades the current shake impulse. Called every step, even when frozen. */
+  updateShake(dt) {
+    this.shakeIntensity = Math.max(0, this.shakeIntensity - this.shakeDecay * dt);
   }
 
   /** World Y that puts the tracked point at the configured screen fraction. */
@@ -50,13 +65,15 @@ export class Camera {
     return targetY - viewHeight * CONFIG.cameraOffsetY;
   }
 
-  /** Interpolated camera X for rendering between fixed steps. */
+  /** Interpolated camera X for rendering, plus the current shake offset. */
   renderX(alpha) {
-    return lerp(this.prevX, this.x, alpha);
+    const base = lerp(this.prevX, this.x, alpha);
+    return this.shakeIntensity > 0 ? base + rand(-1, 1) * this.shakeIntensity : base;
   }
 
-  /** Interpolated camera Y for rendering between fixed steps. */
+  /** Interpolated camera Y for rendering, plus the current shake offset. */
   renderY(alpha) {
-    return lerp(this.prevY, this.y, alpha);
+    const base = lerp(this.prevY, this.y, alpha);
+    return this.shakeIntensity > 0 ? base + rand(-1, 1) * this.shakeIntensity : base;
   }
 }

@@ -67,6 +67,13 @@ export const CONFIG = Object.freeze({
   /** Score earned per pixel of forward progress (x * multiplier). */
   scoreDistanceMultiplier: 0.1,
 
+  // --- Stage 5: juice tuning ------------------------------------------------
+
+  /** Screen-shake units shed per second after a shake impulse. */
+  shakeDecay: 30,
+  /** Downward acceleration applied to particles, in pixels per second squared. */
+  particleGravity: 900,
+
   render: {
     /** Backing-store pixel-ratio cap. Keeps high-DPI phones at a sane cost. */
     maxDPR: 2,
