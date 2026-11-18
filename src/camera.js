@@ -29,6 +29,11 @@ export class Camera {
     this.prevY = this.y;
   }
 
+  /** Snaps back onto the player immediately, used when a run restarts. */
+  reset(targetX, targetY, viewHeight) {
+    this.snapTo(targetX, targetY, viewHeight);
+  }
+
   update(targetX, targetY, viewHeight, dt) {
     this.prevX = this.x;
     this.prevY = this.y;

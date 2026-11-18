@@ -1,6 +1,6 @@
 # NEON GRAPPLE — Game Specification
 
-**Status:** Stage 3 — Procedural rooftops + auto-run
+**Status:** Stage 4 — Death, restart, score, combo, HUD
 **Platform:** CrazyGames (HTML5, desktop + mobile web)
 **Genre:** One-button grapple-swing endless runner
 
@@ -72,9 +72,9 @@ Stage 1: Player auto-runner, camera, placeholder art (Done)
 
 Stage 2: Grapple + swing physics (Done)
 
-Stage 3: Procedural chunks: rooftops, gaps, anchors (Current)
+Stage 3: Procedural chunks: rooftops, gaps, anchors (Done)
 
-Stage 4: Collision, death, score, combo, HUD
+Stage 4: Collision, death, score, combo, HUD (Current)
 
 Stage 5: Juice: particles, shake, trails, slow-mo
 
@@ -118,6 +118,7 @@ src/player.js       auto-running body, gravity, rooftop landing, tether art
 src/camera.js       X-locked follow camera with slow eased vertical follow
 src/world.js        procedural rooftops, gaps, and gap anchors
 src/grapple.js      anchor selection, tether constraint, release boost
+src/hud.js          screen-space score, streak, and game-over overlay
 ```
 
 Planned additions (introduced only when their stage begins):
@@ -220,3 +221,41 @@ Gameplay systems should receive explicit dependencies rather than reading global
   empty console.
 - Still no death/reset, hazards, scoring, audio, or persistence; falling into a
   gap currently drops the player below the city until Stage 4.
+
+### Stage 4 — Death, restart, score, combo, HUD — 2026-11-18
+
+- Added `src/hud.js`: a screen-space HUD drawn after the camera transform is
+  restored. It renders a bold cyan score top-left, a magenta `STREAK xN` in the
+  top-centre (hidden at zero), and a game-over overlay with a dimmed screen,
+  huge white `GAME OVER`, and a cyan `Press Space to Restart` prompt. The title
+  scales down so it fits narrow phone viewports.
+- Added `deathY: 1000` and `scoreDistanceMultiplier: 0.1` to `CONFIG`, plus HUD
+  colour/size/margin entries and layout values for the game-over overlay.
+- Added `score`, `streak`, and `bestStreak` to `Player`, along with `reset()`
+  (spawn position, zero velocity, cleared score/streak, airborne). `bestStreak`
+  deliberately survives a restart as the run record.
+- Distance scoring now runs every fixed step: the score only ever rises and
+  follows `floor(x * scoreDistanceMultiplier)`.
+- Streak logic: a successful tether attach while airborne increments the streak
+  (updating `bestStreak`); touching down on a rooftop clears it. Grounded
+  attaches do not count, so a chain has to be earned in the air.
+- Added `World.reset(cameraX)`: replaces the platform/anchor arrays with just the
+  1000 px starting rooftop and regenerates chunks ahead of the reset camera.
+- Added `Camera.reset(...)` as an explicit immediate snap back to the player,
+  used on restart instead of easing from the old position.
+- `main.js` now owns `gameState` (`PLAYING` / `GAMEOVER`). While playing it
+  updates player, tether, camera, and world; once `player.y > deathY` it freezes
+  the simulation and releases the tether. Space, left click, or touch on the
+  game-over screen calls `player.reset()`, `camera.reset()`, and `world.reset()`,
+  then resumes play at x = 400.
+- Pressing at the death plane cannot fire a grapple, and any held input is
+  cleared so the new run starts neutral.
+- Moved the FPS counter from the top-left to the top-right so it no longer
+  collides with the score.
+- Verified with Node physics/HUD tests and headless Chrome at 1280×581: the
+  first gap drops the player through the death plane, `GAME OVER` freezes the
+  score and world, Space restarts at the spawn rooftop, the score climbs with
+  distance, the streak appears on a mid-air attach and clears on landing, and
+  the console stays empty.
+- Hazard collisions are still absent; falling below `deathY` is the only way to
+  lose a run. Audio, persistence, and mobile polish remain in later stages.

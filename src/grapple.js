@@ -75,6 +75,32 @@ export class Grapple {
   }
 
   /**
+   * Draws the tether from the player's interpolated centre to the anchor.
+   *
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {import('./player.js').Player} player
+   * @param {number} alpha
+   */
+  render(ctx, player, alpha) {
+    if (!this.isAttached) return;
+
+    const x = player.renderX(alpha) + player.width / 2;
+    const y = player.renderY(alpha) + player.height / 2;
+
+    ctx.save();
+    ctx.strokeStyle = '#35f6ff';
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.shadowColor = 'rgba(53, 246, 255, 0.8)';
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(this.anchor.x, this.anchor.y);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /**
    * Enforces the pendulum constraint for one fixed step. The player has already
    * integrated gravity and its velocity by the time this runs; this method only
    * corrects the resulting overstretch and redirects the velocity along the arc.

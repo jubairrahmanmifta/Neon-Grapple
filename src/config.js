@@ -60,6 +60,13 @@ export const CONFIG = Object.freeze({
   generationAhead: 2000,
   cleanupBehind: 1000,
 
+  // --- Stage 4: death, score, and combo tuning ------------------------------
+
+  /** Falling below this world Y ends the run. */
+  deathY: 1000,
+  /** Score earned per pixel of forward progress (x * multiplier). */
+  scoreDistanceMultiplier: 0.1,
+
   render: {
     /** Backing-store pixel-ratio cap. Keeps high-DPI phones at a sane cost. */
     maxDPR: 2,
@@ -80,6 +87,36 @@ export const CONFIG = Object.freeze({
       margin: 18,
       /** Seconds between rolling FPS samples. */
       sampleWindow: 0.5,
+    },
+    score: {
+      label: 'SCORE',
+      color: '#35f6ff',
+      glow: 'rgba(53, 246, 255, 0.75)',
+      weight: 900,
+      size: 30,
+      margin: 24,
+    },
+    streak: {
+      color: '#ff2fd0',
+      glow: 'rgba(255, 47, 208, 0.8)',
+      weight: 800,
+      size: 24,
+      margin: 26,
+    },
+    gameOver: {
+      overlay: 'rgba(3, 4, 10, 0.72)',
+      title: 'GAME OVER',
+      titleColor: '#ffffff',
+      titleGlow: 'rgba(255, 255, 255, 0.7)',
+      titleWeight: 900,
+      titleSize: 84,
+      prompt: 'Press Space to Restart',
+      promptColor: '#35f6ff',
+      promptGlow: 'rgba(53, 246, 255, 0.75)',
+      promptWeight: 700,
+      promptSize: 22,
+      /** Prompt offset below the title, as a fraction of viewport height. */
+      promptOffset: 0.085,
     },
   },
 });

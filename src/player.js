@@ -21,6 +21,22 @@ export class Player {
     this.vx = CONFIG.runSpeed;
     this.vy = 0;
     this.isGrounded = false;
+    this.score = 0;
+    this.streak = 0;
+    this.bestStreak = 0;
+    this.prevX = this.x;
+    this.prevY = this.y;
+  }
+
+  /** Returns the player to its spawn state and clears the current run's score. */
+  reset(x = CONFIG.spawnX, y = CONFIG.spawnY) {
+    this.x = x;
+    this.y = y;
+    this.vx = 0;
+    this.vy = 0;
+    this.isGrounded = false;
+    this.score = 0;
+    this.streak = 0;
     this.prevX = this.x;
     this.prevY = this.y;
   }
@@ -57,6 +73,19 @@ export class Player {
     this.y += this.vy * dt;
 
     this.resolveRooftop(platforms);
+
+    // Score only ever climbs: it tracks the furthest point reached this run.
+    this.score = Math.max(this.score, Math.floor(this.x * CONFIG.scoreDistanceMultiplier));
+  }
+
+  /**
+   * Counts a successful attach while airborne. Chaining swings without touching
+   * a rooftop is what builds the streak; landing clears it again.
+   */
+  registerSwing() {
+    if (this.isGrounded) return;
+    this.streak += 1;
+    if (this.streak > this.bestStreak) this.bestStreak = this.streak;
   }
 
   /**
@@ -86,6 +115,8 @@ export class Player {
     this.vy = 0;
     this.vx = CONFIG.runSpeed;
     this.isGrounded = true;
+    // Touching down ends the airborne swing chain.
+    this.streak = 0;
   }
 
   /**

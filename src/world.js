@@ -33,11 +33,16 @@ export class World {
     this.reset();
   }
 
-  /** Builds the starting rooftop and fills the view ahead of it. */
-  reset() {
+  /**
+   * Clears the whole city and rebuilds the starting rooftop. Called on boot and
+   * on every restart so a new run always begins from the same layout.
+   *
+   * @param {number} [cameraX] left edge of the visible world to fill ahead of
+   */
+  reset(cameraX = 0) {
     this.platforms = [{ x: START_X, y: CONFIG.rooftopY, width: START_WIDTH }];
     this.anchors = [];
-    this.update(0);
+    this.update(cameraX);
   }
 
   /**

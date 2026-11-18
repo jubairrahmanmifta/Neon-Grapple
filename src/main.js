@@ -4,6 +4,7 @@ import { Player } from './player.js';
 import { Camera } from './camera.js';
 import { World } from './world.js';
 import { Grapple } from './grapple.js';
+import { HUD } from './hud.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d', { alpha: false });
@@ -34,6 +35,10 @@ const player = new Player();
 const camera = new Camera(player.x, player.centerY, view.height);
 const world = new World();
 const grapple = new Grapple();
+const hud = new HUD();
+
+/** 'PLAYING' simulates the run; 'GAMEOVER' freezes it until a restart. */
+let gameState = 'PLAYING';
 
 /**
  * One-button input. Any supported source starts a grapple, any release ends it.
@@ -67,19 +72,31 @@ function syncCanvasSize() {
 }
 
 function update(step) {
-  // Gravity and velocity integrate in both states; the tether only redirects
+  // The world is frozen on the game-over screen: no physics, no streaming.
+  if (gameState !== 'PLAYING') return;
+
+  // Gravity and velocity integrate while playing; the tether only redirects
   // that motion, so momentum survives the swing. Rooftops catch the player
   // from above and re-apply the auto-run speed.
   player.update(step, world.platforms);
   if (grapple.isAttached) grapple.update(player, step);
+
+  // Falling past the death plane ends the run and drops the tether.
+  if (player.y > CONFIG.deathY) {
+    gameState = 'GAMEOVER';
+    inputActive = false;
+    if (grapple.isAttached) grapple.release(player);
+    return;
+  }
+
   camera.update(player.x, player.centerY, view.height, step);
   world.update(camera.x);
 }
 
 function beginGrapple() {
-  if (inputActive) return;
+  if (gameState !== 'PLAYING' || inputActive) return;
   inputActive = true;
-  grapple.fire(player, world.anchors);
+  if (grapple.fire(player, world.anchors)) player.registerSwing();
 }
 
 function endGrapple() {
@@ -88,11 +105,24 @@ function endGrapple() {
   if (grapple.isAttached) grapple.release(player);
 }
 
+/** Wipes the run and snaps the camera back to the spawn point. */
+function restart() {
+  inputActive = false;
+  player.reset();
+  camera.reset(player.x, player.centerY, view.height);
+  world.reset(camera.x);
+  gameState = 'PLAYING';
+}
+
 function onKeyDown(event) {
   if (event.code !== 'Space') return;
   // Stop Space from scrolling or activating focused controls.
   event.preventDefault();
   if (event.repeat) return;
+  if (gameState === 'GAMEOVER') {
+    restart();
+    return;
+  }
   beginGrapple();
 }
 
@@ -103,7 +133,12 @@ function onKeyUp(event) {
 }
 
 function onPointerDown(event) {
-  if (event.button === 0) beginGrapple();
+  if (event.button !== 0) return;
+  if (gameState === 'GAMEOVER') {
+    restart();
+    return;
+  }
+  beginGrapple();
 }
 
 function onPointerUp(event) {
@@ -112,39 +147,6 @@ function onPointerUp(event) {
 
 function onFocusLost() {
   endGrapple();
-}
-
-function drawFps() {
-  const cfg = CONFIG.hud.fps;
-  ctx.save();
-  ctx.font = `${cfg.weight} ${cfg.size}px ${CONFIG.render.fonts.mono}`;
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'top';
-  ctx.fillStyle = cfg.color;
-  ctx.shadowColor = cfg.glow;
-  ctx.shadowBlur = 8;
-  ctx.fillText(`${cfg.label} ${Math.round(state.fps)}`, cfg.margin, cfg.margin);
-  ctx.restore();
-}
-
-/** Bright cyan tether from the player's centre to the anchor, if attached. */
-function drawGrapple(alpha) {
-  if (!grapple.isAttached) return;
-
-  const x = player.renderX(alpha) + player.width / 2;
-  const y = player.renderY(alpha) + player.height / 2;
-
-  ctx.save();
-  ctx.strokeStyle = '#35f6ff';
-  ctx.lineWidth = 3;
-  ctx.lineCap = 'round';
-  ctx.shadowColor = 'rgba(53, 246, 255, 0.8)';
-  ctx.shadowBlur = 12;
-  ctx.beginPath();
-  ctx.moveTo(x, y);
-  ctx.lineTo(grapple.anchor.x, grapple.anchor.y);
-  ctx.stroke();
-  ctx.restore();
 }
 
 function render(alpha, frameDelta) {
@@ -171,11 +173,13 @@ function render(alpha, frameDelta) {
   ctx.save();
   ctx.translate(-cameraX, -cameraY);
   world.render(ctx, cameraX, cameraY, view);
-  drawGrapple(alpha);
+  grapple.render(ctx, player, alpha);
   player.render(ctx, alpha);
   ctx.restore();
 
-  drawFps();
+  // HUD lives in screen space so it never scrolls or zooms with the camera.
+  hud.draw(ctx, player, view.width, view.height, gameState === 'GAMEOVER');
+  hud.drawFps(ctx, state.fps, view.width);
 }
 
 window.addEventListener('keydown', onKeyDown);
