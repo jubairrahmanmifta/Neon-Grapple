@@ -1,5 +1,6 @@
 import { CONFIG } from './config.js';
 import { rand } from './utils.js';
+import { renderHazards, updateHazards } from './hazards.js';
 
 const COLORS = {
   platform: '#160b2b',
@@ -30,6 +31,7 @@ export class World {
   constructor() {
     this.platforms = [];
     this.anchors = [];
+    this.hazards = [];
     this.reset();
   }
 
@@ -42,7 +44,8 @@ export class World {
   reset(cameraX = 0) {
     this.platforms = [{ x: START_X, y: CONFIG.rooftopY, width: START_WIDTH }];
     this.anchors = [];
-    this.update(cameraX);
+    this.hazards = [];
+    this.update(cameraX, 0);
   }
 
   /**
@@ -50,11 +53,13 @@ export class World {
    * camera, then drops everything that is no longer worth keeping.
    *
    * @param {number} cameraX left edge of the visible world
+   * @param {number} [dt=0] seconds elapsed, used for drone bobbing
    */
-  update(cameraX) {
+  update(cameraX, dt = 0) {
     while (this.rightmostEdge() < cameraX + CONFIG.generationAhead) {
-      this.generateChunk();
+      this.generateChunk(cameraX);
     }
+    updateHazards(this.hazards, dt);
 
     while (this.platforms.length > 0 && this.platforms[0].x < cameraX - CONFIG.cleanupBehind) {
       this.platforms.shift();
@@ -62,6 +67,17 @@ export class World {
     while (this.anchors.length > 0 && this.anchors[0].x < cameraX - CONFIG.cleanupBehind) {
       this.anchors.shift();
     }
+
+    // Hazards are not strictly ordered by x (drones spawn far ahead), so prune
+    // with an in-place compaction instead of shifting from the front.
+    const cutoff = cameraX - CONFIG.cleanupBehind;
+    let write = 0;
+    for (const hazard of this.hazards) {
+      if (hazard.x + hazard.width < cutoff) continue;
+      this.hazards[write] = hazard;
+      write += 1;
+    }
+    this.hazards.length = write;
   }
 
   /** Right edge of the furthest generated rooftop. */
@@ -70,8 +86,8 @@ export class World {
     return last.x + last.width;
   }
 
-  /** Appends one gap + rooftop + anchor to the right of the current world. */
-  generateChunk() {
+  /** Appends one gap + rooftop + anchor and any optional hazards. */
+  generateChunk(cameraX) {
     const previous = this.platforms[this.platforms.length - 1];
     const gapStart = previous.x + previous.width;
     const gapWidth = Math.round(rand(CONFIG.minGapWidth, CONFIG.maxGapWidth));
@@ -82,18 +98,59 @@ export class World {
       x: gapStart + gapWidth / 2,
       y: Math.round(rand(CONFIG.minAnchorY, CONFIG.maxAnchorY)),
     });
-    this.platforms.push({
-      x: gapEnd,
-      y: previous.y,
-      width,
-    });
+    this.platforms.push({ x: gapEnd, y: previous.y, width });
+
+    // Spikes sit on the new rooftop; their box covers the full tooth height.
+    if (Math.random() < CONFIG.spikeChance) {
+      const spikeWidth = CONFIG.spikeWidth;
+      this.hazards.push({
+        type: 'spike',
+        x: Math.round(rand(gapEnd, gapEnd + width - spikeWidth)),
+        y: previous.y - CONFIG.spikeHeight,
+        width: spikeWidth,
+        height: CONFIG.spikeHeight,
+      });
+    }
+
+    // Half the lasers are vertical beam gates; the rest lie across the gap.
+    if (Math.random() < CONFIG.laserChance) {
+      const vertical = Math.random() < 0.5;
+      const length = CONFIG.laserLength;
+      const thickness = CONFIG.laserThickness;
+      this.hazards.push({
+        type: 'laser',
+        vertical,
+        x: Math.round(rand(gapStart, gapEnd - (vertical ? thickness : length))),
+        y: Math.round(rand(CONFIG.minHazardY, CONFIG.maxHazardY - (vertical ? length : 0))),
+        width: vertical ? thickness : length,
+        height: vertical ? length : thickness,
+      });
+    }
+
+    // Drones spawn far ahead and bob around their own initial height.
+    if (Math.random() < CONFIG.droneChance) {
+      const size = CONFIG.droneSize;
+      const y = Math.round(rand(CONFIG.minHazardY, CONFIG.maxHazardY - size));
+      this.hazards.push({
+        type: 'drone',
+        x: cameraX + CONFIG.droneSpawnAhead,
+        y,
+        width: size,
+        height: size,
+        startY: y,
+        time: 0,
+        phase: rand(0, Math.PI * 2),
+      });
+    }
   }
 
   /**
-   * Draws rooftops as dark purple slabs with a glowing neon top edge, plus the
-   * yellow anchor pucks overhead. Camera translation is already applied.
+   * Draws rooftops, anchors, and the supplied hazard list. Camera translation
+   * is already applied by the caller.
+   *
+   * @param {Array} hazards hazards to draw (defaults to this.hazards)
    */
-  render(ctx, cameraX, cameraY, view) {
+  render(ctx, cameraX, cameraY, view, hazards = this.hazards) {
     const left = cameraX;
     const right = cameraX + view.width;
     const viewBottom = cameraY + view.height;
@@ -115,6 +172,7 @@ export class World {
     }
 
     this.renderAnchors(ctx, left, right, cameraY, viewBottom);
+    renderHazards(ctx, hazards, left, right, cameraY, viewBottom);
   }
 
   /** Bright yellow pucks with a hot inner dot; only visible ones are drawn. */

@@ -79,6 +79,35 @@ export const CONFIG = Object.freeze({
   /** Bolts awarded per score point (a score of 1000 earns 50 bolts). */
   boltsPerScore: 0.05,
 
+  // --- Stage 7: procedural hazard tuning ------------------------------------
+
+  /** Per-chunk spawn chances for spike strips, gap lasers, and drones. */
+  spikeChance: 0.2,
+  laserChance: 0.2,
+  droneChance: 0.2,
+  /** Hazard body sizes, in world pixels. */
+  spikeWidth: 40,
+  spikeHeight: 30,
+  laserLength: 100,
+  laserThickness: 10,
+  droneSize: 50,
+  /** Drones appear this far ahead of the camera. */
+  droneSpawnAhead: 1000,
+  /** Drone sine bob: amplitude in pixels, speed in radians per second. */
+  droneBobAmplitude: 26,
+  droneBobSpeed: 2.2,
+  /** Vertical placement range for lasers and drones. */
+  minHazardY: 200,
+  maxHazardY: 500,
+  /** Lethal impact feedback. */
+  hazardDeathShake: 30,
+  hazardDeathParticles: 50,
+  hazardDeathParticleSpeed: 560,
+  hazardRed: '#ff0055',
+  hazardRedGlow: 'rgba(255, 0, 85, 0.9)',
+  hazardCore: '#ffd6e3',
+  droneBody: '#12091f',
+
   render: {
     /** Backing-store pixel-ratio cap. Keeps high-DPI phones at a sane cost. */
     maxDPR: 2,

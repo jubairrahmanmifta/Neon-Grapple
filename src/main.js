@@ -7,6 +7,7 @@ import { Grapple } from './grapple.js';
 import { HUD } from './hud.js';
 import { ParticleSystem } from './particles.js';
 import { SaveManager } from './save.js';
+import { aabb, aabbOverlap } from './utils.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d', { alpha: false });
@@ -39,6 +40,10 @@ const world = new World();
 const grapple = new Grapple();
 const hud = new HUD();
 const particles = new ParticleSystem();
+
+/** Reused AABBs so hazard checks never allocate in the hot update loop. */
+const playerBox = aabb(0, 0, 0, 0);
+const hazardBox = aabb(0, 0, 0, 0);
 
 /** Saved run records, refreshed whenever a run ends. */
 let saveData = SaveManager.load();
@@ -103,18 +108,52 @@ function update(step) {
   }
   wasGrounded = player.isGrounded;
 
+  // Hazard contact is lethal: violent shake, a red burst, then the shared
+  // game-over path. This can only be reached while PLAYING.
+  if (hitsHazard()) {
+    camera.shake(CONFIG.hazardDeathShake);
+    particles.emit(
+      player.centerX, player.centerY,
+      CONFIG.hazardDeathParticles, CONFIG.hazardRed, CONFIG.hazardDeathParticleSpeed,
+    );
+    endRun();
+    return;
+  }
+
   // Falling past the death plane ends the run, banks the result, and drops the
   // tether. The frozen HUD then reads the freshly refreshed save data.
   if (player.y > CONFIG.deathY) {
-    gameState = 'GAMEOVER';
-    inputActive = false;
-    if (grapple.isAttached) grapple.release(player);
-    saveData = SaveManager.addRunStats(player.score, player.boltsEarned);
+    endRun();
     return;
   }
 
   camera.update(player.x, player.centerY, view.height, step);
-  world.update(camera.x);
+  world.update(camera.x, step);
+}
+
+/** Freezes the run, releases the tether, and banks the result once. */
+function endRun() {
+  gameState = 'GAMEOVER';
+  inputActive = false;
+  if (grapple.isAttached) grapple.release(player);
+  saveData = SaveManager.addRunStats(player.score, player.boltsEarned);
+}
+
+/** True when the player's AABB overlaps any live hazard's AABB. */
+function hitsHazard() {
+  playerBox.x = player.x;
+  playerBox.y = player.y;
+  playerBox.w = player.width;
+  playerBox.h = player.height;
+
+  for (const hazard of world.hazards) {
+    hazardBox.x = hazard.x;
+    hazardBox.y = hazard.y;
+    hazardBox.w = hazard.width;
+    hazardBox.h = hazard.height;
+    if (aabbOverlap(playerBox, hazardBox)) return true;
+  }
+  return false;
 }
 
 function beginGrapple() {
@@ -214,7 +253,7 @@ function render(alpha, frameDelta) {
     const cameraY = camera.renderY(alpha);
     ctx.save();
     ctx.translate(-cameraX, -cameraY);
-    world.render(ctx, cameraX, cameraY, view);
+    world.render(ctx, cameraX, cameraY, view, world.hazards);
     particles.render(ctx);
     grapple.render(ctx, player, alpha);
     player.render(ctx, alpha);

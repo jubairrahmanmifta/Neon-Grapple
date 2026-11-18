@@ -1,6 +1,6 @@
 # NEON GRAPPLE — Game Specification
 
-**Status:** Stage 6 — Save/load, bolts, menu and game-over flow
+**Status:** Stage 7 — Procedural hazards and lethal collision
 
 **Stage 5 controls:** same as Stage 4 — Space / left mouse / touch fires and
 holds the tether, releasing detaches, and Space or click restarts after death.
@@ -10,6 +10,11 @@ The new visuals are feedback only: no gameplay physics was changed.
 starts a run; death opens a Game Over summary with the run's score and bolts.
 Space / click returns to the menu, where the banked High Score and Bolts appear.
 Persistence is local-only; no platform SDK is used.
+
+**Stage 7 controls:** unchanged one-button input. Rooftops may now carry red
+spike strips, gaps may hold horizontal or vertical lasers, and drones hover and
+bob in the skyline. Touching any hazard ends the run immediately with a violent
+shake and a red particle burst; the same Game Over summary follows.
 **Platform:** CrazyGames (HTML5, desktop + mobile web)
 **Genre:** One-button grapple-swing endless runner
 
@@ -89,7 +94,7 @@ Stage 5: Juice: particles, shake, trails, slow-mo (Current)
 
 Stage 6: Save/load, bolts, menu and game-over flow (Done — unlocks, missions, daily seed remain)
 
-Stage 7: CrazyGames SDK: rewarded revive, ads, leaderboard
+Stage 7: Procedural hazards: spikes, lasers, drones, lethal collision (Done — CrazyGames SDK remains)
 
 Stage 8: Mobile touch, perf, QA, ship build
 
@@ -125,11 +130,12 @@ src/loop.js         fixed-timestep loop + interpolated render
 src/utils.js        clamp, lerp, rand, AABB helpers
 src/player.js       auto-running body, gravity, rooftop landing, tether art
 src/camera.js       X-locked follow camera with slow eased vertical follow
-src/world.js        procedural rooftops, gaps, and gap anchors
+src/world.js        procedural rooftops, gaps, anchors, and hazards
 src/grapple.js      anchor selection, tether constraint, release boost
 src/hud.js          screen-space score, streak, and game-over overlay
 src/particles.js    burst particles with gravity and glow
 src/save.js         guarded localStorage persistence (high score + bolts)
+src/hazards.js      hazard rendering and sine-wave drone bobbing
 ```
 
 Planned additions (introduced only when their stage begins):
@@ -344,3 +350,39 @@ Gameplay systems should receive explicit dependencies rather than reading global
   confirm the totals persisted. The console stayed empty.
 - Unlocks, missions, daily seeds, audio, hazards, and mobile polish remain for
   later stages.
+
+### Stage 7 — Procedural hazards and lethal collision — 2026-11-19
+
+- Added `src/hazards.js`: owns hazard visuals and drone motion. Spikes are four
+  glowing pink/red teeth per strip, lasers are red beams with a thin white-hot
+  core (horizontal or vertical), and drones are dark purple squares with a red
+  eye. `updateHazards()` advances each drone's sine bob around its spawn height,
+  so collision and rendering always share its current box.
+- Added hazard tuning to `CONFIG`: `spikeChance`, `laserChance`, and
+  `droneChance` (0.2 each), body sizes, drone bob amplitude/speed, spawn range,
+  `hazardRed`/`hazardRedGlow`/`hazardCore`/`droneBody` colours, and the lethal
+  impact values (`hazardDeathShake: 30`, `hazardDeathParticles: 50`).
+- Added `World.hazards`: `reset()` clears it; each generated chunk can place a
+  spike strip on the new rooftop, a laser across its gap, and a drone ahead of
+  the camera. Hazards behind the camera are culled with in-place compaction, and
+  `World.update(cameraX, dt)` now advances the drones. Spike AABBs start at the
+  roof surface minus their height so they actually cover the teeth, and drones
+  capture their own `startY` for bobbing.
+- `main.js` checks the player AABB against every hazard AABB each fixed step with
+  reused `aabb`/`aabbOverlap` boxes (no hot-loop allocation). A hit shakes the
+  camera with 30 units, emits 50 red particles at the player, releases the
+  tether, banks the run through the shared `endRun()` path, and freezes the
+  simulation. Falls and hazard hits now share that single death path; neither
+  can be triggered from MENU or GAMEOVER.
+- `world.render()` accepts the hazard array and draws it inside the shaken world
+  transform, so hazards line up with rooftops and particles. The HUD and
+  game-over screens needed no changes and show the same summary for hazard
+  deaths.
+- Verified with 9 Node assertions covering forced/default generation, hazard
+  shapes and placement, drone bobbing, behind-camera pruning, lethal AABB
+  overlap, and culled rendering, plus a headless Chrome CDP run at 1280x581 that
+  injected a drone onto the spawn point and confirmed an immediate game over, a
+  visible shake jitter, a 50-particle red burst, a saved score, working visuals
+  for all three hazard types, and an empty console.
+- CrazyGames SDK, rewarded revive, near-miss scoring, unlocks, missions, daily
+  seeds, audio, and mobile polish remain for later stages.
