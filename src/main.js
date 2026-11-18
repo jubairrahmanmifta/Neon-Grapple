@@ -2,7 +2,8 @@ import { CONFIG } from './config.js';
 import { createLoop } from './loop.js';
 import { Player } from './player.js';
 import { Camera } from './camera.js';
-import { World } from './world.js';
+import { ANCHORS, World } from './world.js';
+import { Grapple } from './grapple.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d', { alpha: false });
@@ -30,10 +31,15 @@ const state = {
 };
 
 const player = new Player();
-const camera = new Camera(player.x);
+const camera = new Camera(player.x, player.centerY, view.height);
 const world = new World();
+const grapple = new Grapple();
 
-const JUMP_KEYS = new Set(['Space', 'KeyW', 'ArrowUp']);
+/**
+ * One-button input. Any supported source starts a grapple, any release ends it.
+ * The flag also suppresses key repeat and stray pointer events.
+ */
+let inputActive = false;
 
 /**
  * Matches the canvas backing store to its CSS size at the current (capped) DPR.
@@ -61,21 +67,55 @@ function syncCanvasSize() {
 }
 
 function update(step) {
+  // Gravity and velocity integrate in both states; the tether only redirects
+  // that motion, so momentum survives the swing.
   player.update(step);
-  camera.update(player.x);
+  if (grapple.isAttached) grapple.update(player, step);
+  camera.update(player.x, cameraFocusY(), view.height, step);
+}
+
+/** Vertical focus: the player–anchor midpoint while attached, else the player. */
+function cameraFocusY() {
+  if (grapple.isAttached) return (player.centerY + grapple.anchor.y) / 2;
+  return player.centerY;
+}
+
+function beginGrapple() {
+  if (inputActive) return;
+  inputActive = true;
+  grapple.fire(player, ANCHORS);
+}
+
+function endGrapple() {
+  if (!inputActive) return;
+  inputActive = false;
+  if (grapple.isAttached) grapple.release(player);
 }
 
 function onKeyDown(event) {
-  if (!JUMP_KEYS.has(event.code)) return;
-  // Stop Space/ArrowUp from scrolling or activating focused controls.
-  if (event.code === 'Space' || event.code === 'ArrowUp') event.preventDefault();
+  if (event.code !== 'Space') return;
+  // Stop Space from scrolling or activating focused controls.
+  event.preventDefault();
   if (event.repeat) return;
-  player.jump();
+  beginGrapple();
+}
+
+function onKeyUp(event) {
+  if (event.code !== 'Space') return;
+  event.preventDefault();
+  endGrapple();
 }
 
 function onPointerDown(event) {
-  if (event.button !== 0) return;
-  player.jump();
+  if (event.button === 0) beginGrapple();
+}
+
+function onPointerUp(event) {
+  if (event.button === 0) endGrapple();
+}
+
+function onFocusLost() {
+  endGrapple();
 }
 
 function drawFps() {
@@ -88,6 +128,26 @@ function drawFps() {
   ctx.shadowColor = cfg.glow;
   ctx.shadowBlur = 8;
   ctx.fillText(`${cfg.label} ${Math.round(state.fps)}`, cfg.margin, cfg.margin);
+  ctx.restore();
+}
+
+/** Bright cyan tether from the player's centre to the anchor, if attached. */
+function drawGrapple(alpha) {
+  if (!grapple.isAttached) return;
+
+  const x = player.renderX(alpha) + player.width / 2;
+  const y = player.renderY(alpha) + player.height / 2;
+
+  ctx.save();
+  ctx.strokeStyle = '#35f6ff';
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  ctx.shadowColor = 'rgba(53, 246, 255, 0.8)';
+  ctx.shadowBlur = 12;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(grapple.anchor.x, grapple.anchor.y);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -111,9 +171,11 @@ function render(alpha, frameDelta) {
 
   // World and player share one camera translation; the HUD stays in screen space.
   const cameraX = camera.renderX(alpha);
+  const cameraY = camera.renderY(alpha);
   ctx.save();
-  ctx.translate(-cameraX, 0);
-  world.render(ctx, cameraX, view);
+  ctx.translate(-cameraX, -cameraY);
+  world.render(ctx, cameraX, cameraY, view);
+  drawGrapple(alpha);
   player.render(ctx, alpha);
   ctx.restore();
 
@@ -121,11 +183,16 @@ function render(alpha, frameDelta) {
 }
 
 window.addEventListener('keydown', onKeyDown);
+window.addEventListener('keyup', onKeyUp);
 window.addEventListener('pointerdown', onPointerDown);
+window.addEventListener('pointerup', onPointerUp);
+window.addEventListener('pointercancel', onFocusLost);
+window.addEventListener('blur', onFocusLost);
 
 const loop = createLoop({ update, render });
 
 syncCanvasSize();
+camera.snapTo(player.x, cameraFocusY(), view.height);
 new ResizeObserver(syncCanvasSize).observe(canvas);
 window.addEventListener('resize', syncCanvasSize);
 

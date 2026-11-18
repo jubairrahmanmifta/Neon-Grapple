@@ -1,6 +1,6 @@
 # NEON GRAPPLE — Game Specification
 
-**Status:** Stage 1 — Player auto-runner, camera, placeholder art
+**Status:** Stage 2 — Grapple + swing physics
 **Platform:** CrazyGames (HTML5, desktop + mobile web)
 **Genre:** One-button grapple-swing endless runner
 
@@ -47,8 +47,8 @@ higher multiplier, and a better score.
 
 The game must be fully playable with one finger and one input at a time.
 
-**Stage 1 placeholder:** Space / W / Up Arrow / left click triggers a jump. This
-binding moves to the grapple in Stage 2.
+**Stage 2 controls:** Space / left mouse / touch fires and holds the tether;
+releasing the input detaches. W and Up Arrow no longer do anything.
 
 ### Scoring model (target)
 
@@ -65,9 +65,9 @@ binding moves to the grapple in Stage 2.
 
 Stage 0: Scaffold (Done)
 
-Stage 1: Player auto-runner, camera, placeholder art (Current)
+Stage 1: Player auto-runner, camera, placeholder art (Done)
 
-Stage 2: Grapple + swing physics
+Stage 2: Grapple + swing physics (Current)
 
 Stage 3: Procedural chunks: rooftops, gaps, anchors
 
@@ -111,16 +111,16 @@ src/main.js         bootstrap, viewport/DPR handling, input, system wiring
 src/config.js       all tunable constants (single exported object)
 src/loop.js         fixed-timestep loop + interpolated render
 src/utils.js        clamp, lerp, rand, AABB helpers
-src/player.js       auto-runner state, gravity, jump, placeholder art
-src/camera.js       horizontal follow camera
-src/world.js        placeholder ground plane and scrolling markers
+src/player.js       swinging body, gravity, tether constraint, placeholder art
+src/camera.js       horizontal + eased vertical follow camera
+src/world.js        placeholder ground, scrolling markers, static anchors
+src/grapple.js      anchor selection, tether constraint, release boost
 ```
 
 Planned additions (introduced only when their stage begins):
 
 ```
 src/input.js        unified one-button input (keyboard/mouse/touch)
-src/grapple.js      anchor selection, tether constraint, release
 src/scoring.js      distance, near-miss, combo, persistence
 src/audio.js        procedural WebAudio
 src/platform.js     guarded CrazyGames SDK adapter
@@ -161,3 +161,28 @@ Gameplay systems should receive explicit dependencies rather than reading global
 - Added `playerSpeed`, `gravity`, `jumpForce`, `groundY`, and `cameraOffsetX` to
   `CONFIG`.
 - No grappling, collision, scoring, audio, or persistence yet.
+
+### Stage 2 — Grapple + swing physics — 2026-11-18
+
+- Added `src/grapple.js`: selects the nearest anchor ahead within `grappleRange`,
+  captures the rope length at attach, enforces the pendulum each step, and
+  multiplies velocity by `swingSpeedBoost` on release.
+- Added four static anchors in `src/world.js` at (800, 200), (1500, 250),
+  (2200, 150), and (3000, 300), rendered as glowing yellow pucks with a hot
+  inner dot.
+- Replaced jump input with one-button fire/hold/release on Space, left mouse, and
+  touch via pointer events; key repeat, pointer cancellation, and focus loss are
+  handled.
+- Removed jump, ground clamping, and the per-step auto-run velocity reset from
+  `src/player.js`. Gravity and the tether are now the only forces; momentum
+  carries between swings.
+- Added `player.applyGrappleConstraint()`: snaps the body to the tether circle,
+  removes outward radial velocity, and leaves a slight elastic give through
+  `ropeConstraintDamping`.
+- Changed the camera to ease vertically toward the player, and to frame the
+  player–anchor midpoint while attached so the full pendulum stays visible.
+- Moved the decorative ground down to `groundY: 700` (still non-colliding) so
+  normal swings stay in the skyline; there is no death or reset yet.
+- Removed `jumpForce`; added `grappleRange`, `ropeConstraintDamping`, and
+  `swingSpeedBoost` to `CONFIG`.
+- No collision, death, scoring, audio, or persistence yet.

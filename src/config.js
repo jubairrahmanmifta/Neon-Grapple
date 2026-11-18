@@ -18,16 +18,30 @@ export const CONFIG = Object.freeze({
 
   // --- Stage 1: auto-runner tuning -----------------------------------------
 
-  /** Constant rightward run speed, in pixels per second. */
+  /** Initial rightward speed, in pixels per second. Swings add to it. */
   playerSpeed: 300,
   /** Downward acceleration, in pixels per second squared. */
   gravity: 1500,
-  /** Upward velocity applied by a jump, in pixels per second (negative = up). */
-  jumpForce: -600,
-  /** World-space Y of the ground surface; the player's feet rest here. */
-  groundY: 500,
+  /** World-space Y of the decorative ground plane. Non-colliding until Stage 4. */
+  groundY: 700,
   /** Pixels from the left edge where the camera holds the player on screen. */
   cameraOffsetX: 300,
+  /** Fraction of viewport height where the camera holds its focus point. */
+  cameraOffsetY: 0.5,
+  /** Vertical camera catch-up rate; lower is floatier, higher is locked on. */
+  cameraFollowRate: 8,
+  /** Player spawn position in world space. Starts airborne so gravity acts. */
+  spawnX: 400,
+  spawnY: 270,
+
+  // --- Stage 2: grapple tuning ---------------------------------------------
+
+  /** Maximum distance from the player's centre to an acceptable anchor. */
+  grappleRange: 600,
+  /** Fraction of the rope's overstretch corrected each step (soft tether). */
+  ropeConstraintDamping: 0.98,
+  /** Velocity multiplier applied on release; rewards well-timed detaches. */
+  swingSpeedBoost: 1.05,
 
   render: {
     /** Backing-store pixel-ratio cap. Keeps high-DPI phones at a sane cost. */

@@ -2,32 +2,56 @@ import { CONFIG } from './config.js';
 import { lerp } from './utils.js';
 
 /**
- * Horizontal follow camera.
+ * Follow camera.
  *
- * The camera holds the player a fixed distance from the left edge of the
- * screen, so the world appears to scroll past while the player stays put.
- * Like the player, it keeps the previous step's X so rendering can interpolate.
+ * Horizontally the player is pinned `cameraOffsetX` pixels from the left edge,
+ * so the world scrolls past at a constant rate. Vertically the camera eases
+ * toward the player so a falling or swinging body never leaves the frame; the
+ * slight lag also gives pendulum arcs room to read.
+ *
+ * Like the player, the camera keeps the previous step's position so rendering
+ * can interpolate between fixed updates.
  */
 export class Camera {
-  constructor(targetX) {
+  constructor(targetX, targetY, viewHeight) {
     this.x = 0;
     this.prevX = 0;
-    if (targetX !== undefined) this.snapTo(targetX);
+    this.y = 0;
+    this.prevY = 0;
+    if (targetX !== undefined) this.snapTo(targetX, targetY, viewHeight);
   }
 
   /** Positions the camera immediately, without interpolation. */
-  snapTo(targetX) {
+  snapTo(targetX, targetY, viewHeight) {
     this.x = targetX - CONFIG.cameraOffsetX;
     this.prevX = this.x;
+    this.y = this.targetY(targetY, viewHeight);
+    this.prevY = this.y;
   }
 
-  update(targetX) {
+  update(targetX, targetY, viewHeight, dt) {
     this.prevX = this.x;
+    this.prevY = this.y;
+
     this.x = targetX - CONFIG.cameraOffsetX;
+
+    const target = this.targetY(targetY, viewHeight);
+    const follow = 1 - Math.exp(-CONFIG.cameraFollowRate * dt);
+    this.y += (target - this.y) * follow;
+  }
+
+  /** World Y that puts the tracked point at the configured screen fraction. */
+  targetY(targetY, viewHeight) {
+    return targetY - viewHeight * CONFIG.cameraOffsetY;
   }
 
   /** Interpolated camera X for rendering between fixed steps. */
   renderX(alpha) {
     return lerp(this.prevX, this.x, alpha);
+  }
+
+  /** Interpolated camera Y for rendering between fixed steps. */
+  renderY(alpha) {
+    return lerp(this.prevY, this.y, alpha);
   }
 }
