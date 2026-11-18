@@ -2,11 +2,12 @@ import { CONFIG } from './config.js';
 import { lerp } from './utils.js';
 
 /**
- * The swinging player.
+ * The auto-running, swinging player.
  *
  * `x`/`y` are the top-left corner of an axis-aligned rectangle in world space.
- * Gravity pulls the body down while its current velocity carries it forward.
- * The ground plane is decorative for now; contact and death arrive in Stage 4.
+ * The player always pushes forward, gravity pulls it down, and the tether
+ * redirects that motion into a swing. Rooftops passed in by the world catch the
+ * body from above and re-establish the auto-run.
  *
  * `prevX`/`prevY` hold the previous logic step so the renderer can interpolate
  * between fixed updates and stay smooth on high-refresh displays.
@@ -17,8 +18,9 @@ export class Player {
     this.height = 50;
     this.x = x;
     this.y = y;
-    this.vx = CONFIG.playerSpeed;
+    this.vx = CONFIG.runSpeed;
     this.vy = 0;
+    this.isGrounded = false;
     this.prevX = this.x;
     this.prevY = this.y;
   }
@@ -33,16 +35,57 @@ export class Player {
     return this.y + this.height / 2;
   }
 
-  update(dt) {
+  /**
+   * Integrates one fixed step and resolves rooftop landings.
+   *
+   * @param {number} dt
+   * @param {ReadonlyArray<{ x: number, y: number, width: number }>} platforms
+   */
+  update(dt, platforms = []) {
     this.prevX = this.x;
     this.prevY = this.y;
 
-    // Gravity is always applied; swings change the velocity direction, not the
-    // fact that the player is falling.
+    // Auto-run: never let forward momentum die completely.
+    if (this.isGrounded) this.vx = CONFIG.runSpeed;
+    if (this.vx < CONFIG.runSpeed) {
+      this.vx = Math.min(CONFIG.runSpeed, this.vx + CONFIG.runAcceleration * dt);
+    }
+
     this.vy += CONFIG.gravity * dt;
 
     this.x += this.vx * dt;
     this.y += this.vy * dt;
+
+    this.resolveRooftop(platforms);
+  }
+
+  /**
+   * Lands on the highest rooftop whose surface the player crossed downwards
+   * this step. Platforms are one-way for now: the player can swing up through
+   * them, but cannot fall through a surface from above.
+   */
+  resolveRooftop(platforms) {
+    this.isGrounded = false;
+    if (this.vy < 0) return;
+
+    const left = this.x;
+    const right = this.x + this.width;
+    const previousBottom = this.prevY + this.height;
+    const bottom = this.y + this.height;
+
+    let landing = null;
+    for (const platform of platforms) {
+      if (right <= platform.x || left >= platform.x + platform.width) continue;
+      if (previousBottom > platform.y || bottom < platform.y) continue;
+      if (!landing || platform.y < landing.y) landing = platform;
+    }
+
+    if (!landing) return;
+
+    this.y = landing.y - this.height;
+    this.vy = 0;
+    this.vx = CONFIG.runSpeed;
+    this.isGrounded = true;
   }
 
   /**

@@ -2,7 +2,7 @@ import { CONFIG } from './config.js';
 import { createLoop } from './loop.js';
 import { Player } from './player.js';
 import { Camera } from './camera.js';
-import { ANCHORS, World } from './world.js';
+import { World } from './world.js';
 import { Grapple } from './grapple.js';
 
 const canvas = document.getElementById('game');
@@ -68,22 +68,18 @@ function syncCanvasSize() {
 
 function update(step) {
   // Gravity and velocity integrate in both states; the tether only redirects
-  // that motion, so momentum survives the swing.
-  player.update(step);
+  // that motion, so momentum survives the swing. Rooftops catch the player
+  // from above and re-apply the auto-run speed.
+  player.update(step, world.platforms);
   if (grapple.isAttached) grapple.update(player, step);
-  camera.update(player.x, cameraFocusY(), view.height, step);
-}
-
-/** Vertical focus: the player–anchor midpoint while attached, else the player. */
-function cameraFocusY() {
-  if (grapple.isAttached) return (player.centerY + grapple.anchor.y) / 2;
-  return player.centerY;
+  camera.update(player.x, player.centerY, view.height, step);
+  world.update(camera.x);
 }
 
 function beginGrapple() {
   if (inputActive) return;
   inputActive = true;
-  grapple.fire(player, ANCHORS);
+  grapple.fire(player, world.anchors);
 }
 
 function endGrapple() {
@@ -192,7 +188,8 @@ window.addEventListener('blur', onFocusLost);
 const loop = createLoop({ update, render });
 
 syncCanvasSize();
-camera.snapTo(player.x, cameraFocusY(), view.height);
+camera.snapTo(player.x, player.centerY, view.height);
+world.update(camera.x);
 new ResizeObserver(syncCanvasSize).observe(canvas);
 window.addEventListener('resize', syncCanvasSize);
 

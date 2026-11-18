@@ -6,8 +6,8 @@ import { lerp } from './utils.js';
  *
  * Horizontally the player is pinned `cameraOffsetX` pixels from the left edge,
  * so the world scrolls past at a constant rate. Vertically the camera eases
- * toward the player so a falling or swinging body never leaves the frame; the
- * slight lag also gives pendulum arcs room to read.
+ * slowly toward the player's centre: fast enough to keep a swing in frame,
+ * slow enough that pendulum arcs do not throw the whole city around.
  *
  * Like the player, the camera keeps the previous step's position so rendering
  * can interpolate between fixed updates.

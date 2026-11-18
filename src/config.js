@@ -18,21 +18,21 @@ export const CONFIG = Object.freeze({
 
   // --- Stage 1: auto-runner tuning -----------------------------------------
 
-  /** Initial rightward speed, in pixels per second. Swings add to it. */
-  playerSpeed: 300,
+  /** Constant forward speed enforced on the ground, in pixels per second. */
+  runSpeed: 350,
+  /** Forward acceleration while below runSpeed, in pixels per second squared. */
+  runAcceleration: 2000,
   /** Downward acceleration, in pixels per second squared. */
   gravity: 1500,
-  /** World-space Y of the decorative ground plane. Non-colliding until Stage 4. */
-  groundY: 700,
   /** Pixels from the left edge where the camera holds the player on screen. */
   cameraOffsetX: 300,
-  /** Fraction of viewport height where the camera holds its focus point. */
-  cameraOffsetY: 0.5,
-  /** Vertical camera catch-up rate; lower is floatier, higher is locked on. */
-  cameraFollowRate: 8,
-  /** Player spawn position in world space. Starts airborne so gravity acts. */
+  /** Fraction of viewport height where the camera eases the player to rest. */
+  cameraOffsetY: 0.7,
+  /** Slow vertical catch-up rate; keeps swing arcs from feeling nauseating. */
+  cameraFollowRate: 3,
+  /** Player spawn position, on top of the starting rooftop. */
   spawnX: 400,
-  spawnY: 270,
+  spawnY: 550,
 
   // --- Stage 2: grapple tuning ---------------------------------------------
 
@@ -42,6 +42,23 @@ export const CONFIG = Object.freeze({
   ropeConstraintDamping: 0.98,
   /** Velocity multiplier applied on release; rewards well-timed detaches. */
   swingSpeedBoost: 1.05,
+
+  // --- Stage 3: procedural city tuning -------------------------------------
+
+  /** Y of every rooftop surface. The starting rooftop uses this too. */
+  rooftopY: 600,
+  /** Gap width range, in pixels. */
+  minGapWidth: 200,
+  maxGapWidth: 400,
+  /** Rooftop width range, in pixels. */
+  minRooftopWidth: 400,
+  maxRooftopWidth: 800,
+  /** Anchor height range above the middle of each gap, in pixels. */
+  minAnchorY: 200,
+  maxAnchorY: 300,
+  /** Generate chunks this far ahead of the camera and prune this far behind. */
+  generationAhead: 2000,
+  cleanupBehind: 1000,
 
   render: {
     /** Backing-store pixel-ratio cap. Keeps high-DPI phones at a sane cost. */

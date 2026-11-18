@@ -1,71 +1,120 @@
 import { CONFIG } from './config.js';
-
-/** Spacing of the ground tick marks, in world pixels. */
-const MARKER_SPACING = 100;
-/** Every Nth marker is taller and brighter to give a sense of scale. */
-const MAJOR_EVERY = 5;
+import { rand } from './utils.js';
 
 const COLORS = {
-  ground: '#1a0a2e',
-  rim: '#8a3cff',
-  marker: 'rgba(146, 88, 255, 0.35)',
-  markerMajor: 'rgba(200, 165, 255, 0.85)',
+  platform: '#160b2b',
+  platformEdge: '#c46bff',
+  platformEdgeGlow: 'rgba(196, 107, 255, 0.85)',
   anchor: '#ffe94a',
   anchorCore: '#fffbe0',
 };
 
 const ANCHOR_RADIUS = 9;
 const ANCHOR_CORE_RADIUS = 3;
+const START_X = 0;
+const START_WIDTH = 1000;
+const EDGE_HEIGHT = 3;
+/** Extra body drawn below the viewport so buildings never show a bottom seam. */
+const BODY_OVERDRAW = 200;
 
 /**
- * Static swing anchors. Stage 3 will generate these procedurally; for now they
- * are a hand-placed chain so the pendulum can be tuned.
- */
-export const ANCHORS = Object.freeze([
-  Object.freeze({ x: 800, y: 200 }),
-  Object.freeze({ x: 1500, y: 250 }),
-  Object.freeze({ x: 2200, y: 150 }),
-  Object.freeze({ x: 3000, y: 300 }),
-]);
-
-/**
- * Placeholder world renderer.
+ * Procedural rooftop city.
  *
- * Draws a dark purple ground plane below CONFIG.groundY and repeating vertical
- * markers so forward motion is visible. Only the slice of world currently on
- * screen is drawn, so the plane is effectively infinite without cost.
- *
- * Call with the camera translation already applied; `cameraX`/`cameraY` are
- * passed in so the visible range can be derived.
+ * The world is an endless chain of flat rooftops separated by gaps. Each gap
+ * owns exactly one sky anchor, placed above its midpoint, so a player who runs
+ * off the edge always has something to aim at. Platforms and anchors are
+ * generated ahead of the camera and pruned behind it, which keeps the arrays
+ * small no matter how long a run lasts.
  */
 export class World {
+  constructor() {
+    this.platforms = [];
+    this.anchors = [];
+    this.reset();
+  }
+
+  /** Builds the starting rooftop and fills the view ahead of it. */
+  reset() {
+    this.platforms = [{ x: START_X, y: CONFIG.rooftopY, width: START_WIDTH }];
+    this.anchors = [];
+    this.update(0);
+  }
+
+  /**
+   * Generates chunks until the rightmost rooftop is far enough ahead of the
+   * camera, then drops everything that is no longer worth keeping.
+   *
+   * @param {number} cameraX left edge of the visible world
+   */
+  update(cameraX) {
+    while (this.rightmostEdge() < cameraX + CONFIG.generationAhead) {
+      this.generateChunk();
+    }
+
+    while (this.platforms.length > 0 && this.platforms[0].x < cameraX - CONFIG.cleanupBehind) {
+      this.platforms.shift();
+    }
+    while (this.anchors.length > 0 && this.anchors[0].x < cameraX - CONFIG.cleanupBehind) {
+      this.anchors.shift();
+    }
+  }
+
+  /** Right edge of the furthest generated rooftop. */
+  rightmostEdge() {
+    const last = this.platforms[this.platforms.length - 1];
+    return last.x + last.width;
+  }
+
+  /** Appends one gap + rooftop + anchor to the right of the current world. */
+  generateChunk() {
+    const previous = this.platforms[this.platforms.length - 1];
+    const gapStart = previous.x + previous.width;
+    const gapWidth = Math.round(rand(CONFIG.minGapWidth, CONFIG.maxGapWidth));
+    const gapEnd = gapStart + gapWidth;
+    const width = Math.round(rand(CONFIG.minRooftopWidth, CONFIG.maxRooftopWidth));
+
+    this.anchors.push({
+      x: gapStart + gapWidth / 2,
+      y: Math.round(rand(CONFIG.minAnchorY, CONFIG.maxAnchorY)),
+    });
+    this.platforms.push({
+      x: gapEnd,
+      y: previous.y,
+      width,
+    });
+  }
+
+  /**
+   * Draws rooftops as dark purple slabs with a glowing neon top edge, plus the
+   * yellow anchor pucks overhead. Camera translation is already applied.
+   */
   render(ctx, cameraX, cameraY, view) {
-    const top = CONFIG.groundY;
     const left = cameraX;
     const right = cameraX + view.width;
     const viewBottom = cameraY + view.height;
-    const bottom = Math.max(viewBottom, top + 1);
 
-    ctx.fillStyle = COLORS.ground;
-    ctx.fillRect(left, top, view.width, bottom - top);
+    for (const platform of this.platforms) {
+      if (platform.x + platform.width < left || platform.x > right) continue;
+      if (platform.y > viewBottom) continue;
 
-    const first = Math.floor(left / MARKER_SPACING) * MARKER_SPACING;
-    for (let x = first; x <= right; x += MARKER_SPACING) {
-      const major = Math.abs(x) % (MARKER_SPACING * MAJOR_EVERY) === 0;
-      ctx.fillStyle = major ? COLORS.markerMajor : COLORS.marker;
-      ctx.fillRect(x, top, major ? 2 : 1, major ? 44 : 22);
+      const bodyHeight = Math.max(0, viewBottom - platform.y) + BODY_OVERDRAW;
+      ctx.fillStyle = COLORS.platform;
+      ctx.fillRect(platform.x, platform.y, platform.width, bodyHeight);
+
+      ctx.save();
+      ctx.shadowColor = COLORS.platformEdgeGlow;
+      ctx.shadowBlur = 14;
+      ctx.fillStyle = COLORS.platformEdge;
+      ctx.fillRect(platform.x, platform.y - EDGE_HEIGHT, platform.width, EDGE_HEIGHT);
+      ctx.restore();
     }
-
-    // Neon rim along the horizon line.
-    ctx.fillStyle = COLORS.rim;
-    ctx.fillRect(left, top - 2, view.width, 2);
 
     this.renderAnchors(ctx, left, right, cameraY, viewBottom);
   }
 
   /** Bright yellow pucks with a hot inner dot; only visible ones are drawn. */
   renderAnchors(ctx, left, right, top, bottom) {
-    for (const anchor of ANCHORS) {
+    for (const anchor of this.anchors) {
       if (anchor.x < left - 40 || anchor.x > right + 40) continue;
       if (anchor.y < top - 40 || anchor.y > bottom + 40) continue;
 

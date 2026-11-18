@@ -1,6 +1,6 @@
 # NEON GRAPPLE — Game Specification
 
-**Status:** Stage 2 — Grapple + swing physics
+**Status:** Stage 3 — Procedural rooftops + auto-run
 **Platform:** CrazyGames (HTML5, desktop + mobile web)
 **Genre:** One-button grapple-swing endless runner
 
@@ -9,9 +9,9 @@
 ## 1. Concept
 
 Neon Grapple is a fast, one-button, side-view endless runner set in a procedurally
-generated neon cyberpunk city. The player never runs on the ground: they fire a
-grappling line at a skyline anchor, swing on the tether, release at the right
-moment, and carry their momentum into the next swing.
+generated neon cyberpunk city. The player auto-runs across an endless chain of
+rooftops, fires a grappling line at the skyline anchor above each gap, swings
+across, and releases to land running on the far side.
 
 The fantasy is flow: chain clean swings, skim past hazards, and build speed through
 a city that never repeats. There is no finish line — the goal is a longer run, a
@@ -30,9 +30,11 @@ higher multiplier, and a better score.
 
 ### Core loop
 
-- Automatic forward travel; the world scrolls toward the player.
-- **Press/hold:** fire a tether at the best available anchor ahead and swing.
-- **Release:** detach, keep the tangential velocity, and fly to the next anchor.
+- Automatic forward travel along rooftops; the world scrolls toward the player.
+- Gaps interrupt the run. **Press/hold:** fire a tether at the best available
+  anchor above the next gap and swing across.
+- **Release:** detach, keep the tangential velocity, and land running on the far
+  rooftop.
 - Avoiding rooftops, beams, drones, and other hazards keeps the run alive.
 - One collision ends the run; distance, near-misses, and swing chains determine
   the final score.
@@ -47,8 +49,9 @@ higher multiplier, and a better score.
 
 The game must be fully playable with one finger and one input at a time.
 
-**Stage 2 controls:** Space / left mouse / touch fires and holds the tether;
-releasing the input detaches. W and Up Arrow no longer do anything.
+**Stage 3 controls:** the player auto-runs to the right on rooftops. Space / left
+mouse / touch fires the tether at the anchor above the next gap, from the ground
+or mid-air; releasing the input detaches. There is no jump.
 
 ### Scoring model (target)
 
@@ -67,9 +70,9 @@ Stage 0: Scaffold (Done)
 
 Stage 1: Player auto-runner, camera, placeholder art (Done)
 
-Stage 2: Grapple + swing physics (Current)
+Stage 2: Grapple + swing physics (Done)
 
-Stage 3: Procedural chunks: rooftops, gaps, anchors
+Stage 3: Procedural chunks: rooftops, gaps, anchors (Current)
 
 Stage 4: Collision, death, score, combo, HUD
 
@@ -111,9 +114,9 @@ src/main.js         bootstrap, viewport/DPR handling, input, system wiring
 src/config.js       all tunable constants (single exported object)
 src/loop.js         fixed-timestep loop + interpolated render
 src/utils.js        clamp, lerp, rand, AABB helpers
-src/player.js       swinging body, gravity, tether constraint, placeholder art
-src/camera.js       horizontal + eased vertical follow camera
-src/world.js        placeholder ground, scrolling markers, static anchors
+src/player.js       auto-running body, gravity, rooftop landing, tether art
+src/camera.js       X-locked follow camera with slow eased vertical follow
+src/world.js        procedural rooftops, gaps, and gap anchors
 src/grapple.js      anchor selection, tether constraint, release boost
 ```
 
@@ -186,3 +189,34 @@ Gameplay systems should receive explicit dependencies rather than reading global
 - Removed `jumpForce`; added `grappleRange`, `ropeConstraintDamping`, and
   `swingSpeedBoost` to `CONFIG`.
 - No collision, death, scoring, audio, or persistence yet.
+
+### Stage 3 — Procedural rooftops + auto-run — 2026-11-18
+
+- Rebuilt `src/world.js` as an endless procedural generator. It starts with a
+  1000 px rooftop at (0, 600), then appends random gaps (200–400 px), rooftops
+  (400–800 px wide, same 600 px surface), and one anchor above the exact middle
+  of every gap at a random height of 200–300 px.
+- Added generate-ahead / prune-behind streaming: chunks are created until the
+  rightmost roof is 2000 px ahead of the camera, and platforms/anchors more than
+  1000 px behind it are removed. The arrays stay small on arbitrarily long runs.
+- Replaced the static anchor list and scrolling ground markers with rendered
+  rooftops: dark purple slabs under a glowing 3 px neon top edge. Anchors keep
+  their bright yellow puck + hot core look and are culled off-screen.
+- Restored the auto-runner in `src/player.js`. Forward speed accelerates toward
+  `runSpeed` whenever it drops below it, and landing snaps it back to
+  `runSpeed`, so swings can add momentum while forward motion always recovers.
+- Added one-way rooftop landing collision: the player lands on the highest top
+  surface crossed while falling, snaps exactly onto it, zeroes `vy`, and sets
+  `isGrounded`; without a surface beneath it, the player falls and clears the
+  flag. Pressing the grapple works both grounded and airborne.
+- Changed the camera to track X rigidly at the usual 300 px offset and follow Y
+  with a deliberately slow exponential lerp (`cameraFollowRate: 3`, focus at 70%
+  of viewport height). The player–anchor midpoint framing was removed.
+- Added `runSpeed`, `runAcceleration`, `rooftopY`, gap/rooftop width ranges,
+  anchor height range, and generation distances to `CONFIG`; retired
+  `playerSpeed` and `groundY`.
+- Verified with Node physics/generation tests and headless Chrome runs across
+  multiple keyboard- and mouse-cleared gaps at 1280×581 and 820×500, with an
+  empty console.
+- Still no death/reset, hazards, scoring, audio, or persistence; falling into a
+  gap currently drops the player below the city until Stage 4.
