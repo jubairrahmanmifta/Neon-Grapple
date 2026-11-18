@@ -7,6 +7,7 @@ import { Grapple } from './grapple.js';
 import { HUD } from './hud.js';
 import { ParticleSystem } from './particles.js';
 import { SaveManager } from './save.js';
+import { SDK } from './sdk.js';
 import { aabb, aabbOverlap } from './utils.js';
 
 const canvas = document.getElementById('game');
@@ -50,6 +51,15 @@ let saveData = SaveManager.load();
 
 /** 'MENU' waits for a start press; 'PLAYING' simulates; 'GAMEOVER' freezes. */
 let gameState = 'MENU';
+
+/** Deaths since the last midroll break; reset when a break is requested. */
+let deathsSinceAd = 0;
+
+/** The rewarded revive is a one-time lifeline for the current run. */
+let hasRevivedThisRun = false;
+
+/** True while an ad is in flight, so presses cannot change state mid-ad. */
+let adInProgress = false;
 
 /** Tracks the airborne-to-grounded transition so landings fire juice once. */
 let wasGrounded = true;
@@ -133,10 +143,23 @@ function update(step) {
 
 /** Freezes the run, releases the tether, and banks the result once. */
 function endRun() {
+  if (gameState !== 'PLAYING') return;
+  player.deathY = player.y;
   gameState = 'GAMEOVER';
   inputActive = false;
   if (grapple.isAttached) grapple.release(player);
+  SDK.gameplayStop();
   saveData = SaveManager.addRunStats(player.score, player.boltsEarned);
+
+  // Death is a natural break. Every third death asks for a midroll ad while the
+  // simulation is already frozen, then keeps the summary interactive.
+  deathsSinceAd += 1;
+  if (deathsSinceAd >= CONFIG.midrollEveryDeaths) {
+    deathsSinceAd = 0;
+    adInProgress = true;
+    const adDone = () => { adInProgress = false; };
+    SDK.showMidroll().then(adDone, adDone);
+  }
 }
 
 /** True when the player's AABB overlaps any live hazard's AABB. */
@@ -177,10 +200,12 @@ function endGrapple() {
 function startRun() {
   inputActive = true;
   wasGrounded = true;
+  hasRevivedThisRun = false;
   player.reset();
   camera.reset(player.x, player.centerY, view.height);
   world.reset(camera.x);
   gameState = 'PLAYING';
+  SDK.gameplayStart();
 }
 
 /** Returns from the summary to the menu; the banked totals stay on screen. */
@@ -189,8 +214,46 @@ function goToMenu() {
   gameState = 'MENU';
 }
 
+/**
+ * Spends the run's one rewarded revive. The reward is only granted after the
+ * SDK confirms the ad completed; a dismissed or unavailable ad leaves the
+ * summary untouched.
+ */
+async function tryRevive() {
+  if (gameState !== 'GAMEOVER' || hasRevivedThisRun || adInProgress) return;
+
+  adInProgress = true;
+  let rewarded = false;
+  try {
+    rewarded = await SDK.showRewarded();
+  } finally {
+    adInProgress = false;
+  }
+  if (!rewarded || gameState !== 'GAMEOVER' || hasRevivedThisRun) return;
+
+  hasRevivedThisRun = true;
+  gameState = 'PLAYING';
+  SDK.gameplayStart();
+
+  // Lift clear of the rooftop and jump, so both fall and hazard deaths resume
+  // in open air. A nearby hazard sweep keeps the player from dying instantly.
+  player.y = Math.min(player.deathY - CONFIG.reviveRise, CONFIG.rooftopY - 120);
+  player.vy = CONFIG.reviveJumpVelocity;
+  player.vx = Math.max(player.vx, CONFIG.runSpeed);
+  player.prevY = player.y;
+  player.isGrounded = false;
+  player.resetTrail();
+  world.clearHazardsNear(player.centerX, player.y, CONFIG.reviveHazardClearRadius);
+  camera.snapTo(player.x, player.centerY, view.height);
+  particles.emit(player.centerX, player.centerY, 20, '#ffcf4d', 300);
+
+  wasGrounded = false;
+  inputActive = false;
+}
+
 /** A press advances MENU -> PLAYING -> GAMEOVER -> MENU. */
 function handlePress() {
+  if (adInProgress) return;
   if (gameState === 'PLAYING') {
     beginGrapple();
   } else if (gameState === 'MENU') {
@@ -201,6 +264,12 @@ function handlePress() {
 }
 
 function onKeyDown(event) {
+  // R is the rewarded-revive shortcut; it is only meaningful on the summary.
+  if (event.code === 'KeyR') {
+    event.preventDefault();
+    if (!event.repeat) tryRevive();
+    return;
+  }
   if (event.code !== 'Space') return;
   // Stop Space from scrolling or activating focused controls.
   event.preventDefault();
@@ -216,6 +285,17 @@ function onKeyUp(event) {
 
 function onPointerDown(event) {
   if (event.button !== 0) return;
+
+  // Mobile has no R key: the gold revive prompt doubles as a click/tap area.
+  if (gameState === 'GAMEOVER' && !hasRevivedThisRun && !adInProgress) {
+    const rect = canvas.getBoundingClientRect();
+    const y = (event.clientY - rect.top) / Math.max(1, rect.height);
+    const cfg = CONFIG.hud.gameOver;
+    if (y >= cfg.promptY + 0.04 && y <= cfg.reviveY + 0.05) {
+      tryRevive();
+      return;
+    }
+  }
   handlePress();
 }
 
@@ -262,7 +342,7 @@ function render(alpha, frameDelta) {
 
   // HUD lives in screen space: reset to the DPR transform so it never shakes.
   ctx.setTransform(view.scaleX, 0, 0, view.scaleY, 0, 0);
-  hud.draw(ctx, player, view.width, view.height, gameState, saveData);
+  hud.draw(ctx, player, view.width, view.height, gameState, saveData, hasRevivedThisRun);
   const fpsTop = gameState === 'PLAYING'
     ? CONFIG.hud.bolts.margin + CONFIG.hud.bolts.size + 8
     : CONFIG.hud.fps.margin;
@@ -277,6 +357,9 @@ window.addEventListener('pointercancel', onFocusLost);
 window.addEventListener('blur', onFocusLost);
 
 const loop = createLoop({ update, render });
+
+// Platform init is optional; off-platform the adapter logs a mock and resolves.
+SDK.init();
 
 syncCanvasSize();
 camera.snapTo(player.x, player.centerY, view.height);

@@ -80,6 +80,23 @@ export class World {
     this.hazards.length = write;
   }
 
+  /**
+   * Removes hazards close to a point, used to keep a revived player's first
+   * moments fair. In-place compaction preserves the shared hazards array.
+   */
+  clearHazardsNear(x, y, radius) {
+    const radiusSq = radius * radius;
+    let write = 0;
+    for (const hazard of this.hazards) {
+      const dx = Math.max(hazard.x - x, 0, x - (hazard.x + hazard.width));
+      const dy = Math.max(hazard.y - y, 0, y - (hazard.y + hazard.height));
+      if (dx * dx + dy * dy <= radiusSq) continue;
+      this.hazards[write] = hazard;
+      write += 1;
+    }
+    this.hazards.length = write;
+  }
+
   /** Right edge of the furthest generated rooftop. */
   rightmostEdge() {
     const last = this.platforms[this.platforms.length - 1];

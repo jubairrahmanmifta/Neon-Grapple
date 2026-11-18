@@ -1,6 +1,6 @@
 # NEON GRAPPLE — Game Specification
 
-**Status:** Stage 7 — Procedural hazards and lethal collision
+**Status:** Stage 8 — CrazyGames SDK, ads, and rewarded revive
 
 **Stage 5 controls:** same as Stage 4 — Space / left mouse / touch fires and
 holds the tether, releasing detaches, and Space or click restarts after death.
@@ -15,6 +15,12 @@ Persistence is local-only; no platform SDK is used.
 spike strips, gaps may hold horizontal or vertical lasers, and drones hover and
 bob in the skyline. Touching any hazard ends the run immediately with a violent
 shake and a red particle burst; the same Game Over summary follows.
+
+**Stage 8 controls:** the one-button grapple loop is unchanged. On Game Over,
+press R (or tap the gold prompt on mobile) to watch an optional rewarded ad and
+revive once per run; Space/click still returns to the menu. Every third death
+requests a midroll break. Off-platform all SDK calls are logged mocks that
+resolve immediately, so localhost play is unaffected.
 **Platform:** CrazyGames (HTML5, desktop + mobile web)
 **Genre:** One-button grapple-swing endless runner
 
@@ -94,9 +100,9 @@ Stage 5: Juice: particles, shake, trails, slow-mo (Current)
 
 Stage 6: Save/load, bolts, menu and game-over flow (Done — unlocks, missions, daily seed remain)
 
-Stage 7: Procedural hazards: spikes, lasers, drones, lethal collision (Done — CrazyGames SDK remains)
+Stage 7: Procedural hazards: spikes, lasers, drones, lethal collision (Done)
 
-Stage 8: Mobile touch, perf, QA, ship build
+Stage 8: CrazyGames SDK, ads, rewarded revive (Done — mobile touch, perf, QA, ship build remain)
 
 ---
 
@@ -136,6 +142,7 @@ src/hud.js          screen-space score, streak, and game-over overlay
 src/particles.js    burst particles with gravity and glow
 src/save.js         guarded localStorage persistence (high score + bolts)
 src/hazards.js      hazard rendering and sine-wave drone bobbing
+src/sdk.js          guarded CrazyGames SDK v3 wrapper with local mocks
 ```
 
 Planned additions (introduced only when their stage begins):
@@ -144,7 +151,6 @@ Planned additions (introduced only when their stage begins):
 src/input.js        unified one-button input (keyboard/mouse/touch)
 src/scoring.js      distance, near-miss, combo
 src/audio.js        procedural WebAudio
-src/platform.js     guarded CrazyGames SDK adapter
 ```
 
 `main.js` owns the canvas and drives `update`/`render` through `loop.js`.
@@ -384,5 +390,29 @@ Gameplay systems should receive explicit dependencies rather than reading global
   injected a drone onto the spawn point and confirmed an immediate game over, a
   visible shake jitter, a 50-particle red burst, a saved score, working visuals
   for all three hazard types, and an empty console.
-- CrazyGames SDK, rewarded revive, near-miss scoring, unlocks, missions, daily
-  seeds, audio, and mobile polish remain for later stages.
+- Near-miss scoring, unlocks, missions, daily seeds, audio, and mobile polish
+  remain for later stages.
+
+### Stage 8 — CrazyGames SDK, ads, and rewarded revive — 2026-11-19
+
+- Added the CrazyGames HTML5 SDK v3 script to `index.html` and created
+  `src/sdk.js`: a guarded wrapper that calls `SDK.init()`, the gameplay
+  lifecycle signals, and `ad.requestAd('midroll' | 'rewarded')`. Local origins
+  and a missing/broken SDK resolve to logged `SDK Mock: [Action]` calls, so
+  development never depends on the platform.
+- `main.js` initializes the SDK at boot, sends `gameplayStart()` on MENU ->
+  PLAYING and on revive, and `gameplayStop()` in the shared death path.
+- Deaths are counted in `deathsSinceAd`; every third death requests a midroll ad
+  from the frozen Game Over screen and resets the counter.
+- Added a one-per-run rewarded revive: R (or the gold prompt's tap area) calls
+  `showRewarded()`, and only a completed ad lifts the player above the rooftop,
+  applies an upward impulse, clears nearby hazards, and resumes play. A dismissed
+  ad leaves the summary untouched, and the offer disappears after use.
+- `hud.js` draws a gold `Press R to Revive` prompt with an ad hint below the
+  continue prompt while the lifeline is still available.
+- Verified with SDK unit tests for mock, platform, dismissal, and failure paths,
+  plus a headless Chrome CDP run that exercised startup mocks, lifecycle calls,
+  three deaths, the midroll log, revive/resume, one-revive-per-run enforcement,
+  and an empty error console.
+- Near-miss scoring, unlocks, missions, daily seeds, audio, mobile touch polish,
+  performance QA, and the ship build remain.

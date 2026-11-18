@@ -108,6 +108,17 @@ export const CONFIG = Object.freeze({
   hazardCore: '#ffd6e3',
   droneBody: '#12091f',
 
+  // --- Stage 8: CrazyGames SDK and rewarded revive --------------------------
+
+  /** A midroll break is requested after this many deaths. */
+  midrollEveryDeaths: 3,
+  /** Revive lifts the player this far above the recorded death height. */
+  reviveRise: 200,
+  /** Upward impulse applied on revive, in pixels per second. */
+  reviveJumpVelocity: -300,
+  /** Hazards this close to the revived player are removed for fairness. */
+  reviveHazardClearRadius: 260,
+
   render: {
     /** Backing-store pixel-ratio cap. Keeps high-DPI phones at a sane cost. */
     maxDPR: 2,
@@ -195,6 +206,15 @@ export const CONFIG = Object.freeze({
       promptWeight: 700,
       promptSize: 22,
       promptY: 0.78,
+      /** Optional one-time rewarded revive, drawn below the continue prompt. */
+      revivePrompt: 'Press R to Revive',
+      reviveHint: 'Watch an ad to continue',
+      reviveColor: '#ffcf4d',
+      reviveGlow: 'rgba(255, 207, 77, 0.8)',
+      reviveWeight: 800,
+      reviveSize: 20,
+      reviveHintSize: 14,
+      reviveY: 0.87,
     },
   },
 });

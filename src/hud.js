@@ -17,14 +17,16 @@ export class HUD {
    * @param {number} screenHeight
    * @param {'MENU'|'PLAYING'|'GAMEOVER'} gameState
    * @param {{highScore: number, totalBolts: number}} saveData
+   * @param {boolean} hasRevivedThisRun hides the revive offer after it is used
    */
-  draw(ctx, player, screenWidth, screenHeight, gameState = 'PLAYING', saveData = DEFAULT_SAVE) {
+  draw(ctx, player, screenWidth, screenHeight, gameState = 'PLAYING', saveData = DEFAULT_SAVE,
+    hasRevivedThisRun = false) {
     if (gameState === 'MENU') {
       this.drawMenu(ctx, screenWidth, screenHeight, saveData);
       return;
     }
     if (gameState === 'GAMEOVER') {
-      this.drawGameOver(ctx, player, screenWidth, screenHeight, saveData);
+      this.drawGameOver(ctx, player, screenWidth, screenHeight, saveData, hasRevivedThisRun);
       return;
     }
     this.drawScore(ctx, player);
@@ -127,7 +129,7 @@ export class HUD {
     ctx.restore();
   }
 
-  drawGameOver(ctx, player, screenWidth, screenHeight, saveData) {
+  drawGameOver(ctx, player, screenWidth, screenHeight, saveData, hasRevivedThisRun = false) {
     const cfg = CONFIG.hud.gameOver;
     const centerX = screenWidth / 2;
     const display = CONFIG.render.fonts.display;
@@ -156,6 +158,17 @@ export class HUD {
     const promptSize = Math.min(cfg.promptSize, screenWidth * 0.06);
     this.centered(ctx, cfg.prompt, centerX, screenHeight * cfg.promptY,
       `${cfg.promptWeight} ${promptSize}px ${display}`, cfg.promptColor, cfg.promptGlow);
+
+    // The one-time rewarded revive offer sits below the continue prompt in
+    // gold, and disappears for the rest of the run once it has been used.
+    if (!hasRevivedThisRun) {
+      const reviveSize = Math.min(cfg.reviveSize, screenWidth * 0.055);
+      this.centered(ctx, cfg.revivePrompt, centerX, screenHeight * cfg.reviveY,
+        `${cfg.reviveWeight} ${reviveSize}px ${display}`, cfg.reviveColor, cfg.reviveGlow);
+      const hintSize = Math.min(cfg.reviveHintSize, screenWidth * 0.042);
+      this.centered(ctx, cfg.reviveHint, centerX, screenHeight * cfg.reviveY + reviveSize * 1.15,
+        `600 ${hintSize}px ${display}`, cfg.reviveColor, cfg.reviveGlow, 6);
+    }
     ctx.restore();
   }
 }

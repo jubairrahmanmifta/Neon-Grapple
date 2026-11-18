@@ -17,6 +17,8 @@ export class Player {
     this.height = 50;
     this.x = x;
     this.y = y;
+    /** Body height at the moment of death; the revive lifts from here. */
+    this.deathY = y;
     this.vx = CONFIG.runSpeed;
     this.vy = 0;
     this.isGrounded = false;
@@ -39,6 +41,7 @@ export class Player {
   reset(x = CONFIG.spawnX, y = CONFIG.spawnY) {
     this.x = x;
     this.y = y;
+    this.deathY = y;
     this.vx = 0;
     this.vy = 0;
     this.isGrounded = false;
