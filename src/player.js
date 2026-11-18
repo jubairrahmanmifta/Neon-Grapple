@@ -23,6 +23,7 @@ export class Player {
     this.score = 0;
     this.streak = 0;
     this.bestStreak = 0;
+    this.boltsEarned = 0;
     this.prevX = this.x;
     this.prevY = this.y;
     // Pre-allocated ring buffer so the update loop never allocates.
@@ -43,6 +44,7 @@ export class Player {
     this.isGrounded = false;
     this.score = 0;
     this.streak = 0;
+    this.boltsEarned = 0;
     this.prevX = this.x;
     this.prevY = this.y;
     this.resetTrail();
@@ -94,6 +96,7 @@ export class Player {
 
     // Score only ever climbs: it tracks the furthest point reached this run.
     this.score = Math.max(this.score, Math.floor(this.x * CONFIG.scoreDistanceMultiplier));
+    this.boltsEarned = Math.floor(this.score * CONFIG.boltsPerScore);
 
     this.recordTrail();
   }

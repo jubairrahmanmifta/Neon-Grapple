@@ -1,10 +1,15 @@
 # NEON GRAPPLE — Game Specification
 
-**Status:** Stage 5 — Game juice (particles, shake, trails)
+**Status:** Stage 6 — Save/load, bolts, menu and game-over flow
 
 **Stage 5 controls:** same as Stage 4 — Space / left mouse / touch fires and
 holds the tether, releasing detaches, and Space or click restarts after death.
 The new visuals are feedback only: no gameplay physics was changed.
+
+**Stage 6 controls:** the game opens on a Main Menu. Space / left mouse / touch
+starts a run; death opens a Game Over summary with the run's score and bolts.
+Space / click returns to the menu, where the banked High Score and Bolts appear.
+Persistence is local-only; no platform SDK is used.
 **Platform:** CrazyGames (HTML5, desktop + mobile web)
 **Genre:** One-button grapple-swing endless runner
 
@@ -82,7 +87,7 @@ Stage 4: Collision, death, score, combo, HUD (Done)
 
 Stage 5: Juice: particles, shake, trails, slow-mo (Current)
 
-Stage 6: Save/load, bolts, unlocks, missions, daily seed
+Stage 6: Save/load, bolts, menu and game-over flow (Done — unlocks, missions, daily seed remain)
 
 Stage 7: CrazyGames SDK: rewarded revive, ads, leaderboard
 
@@ -104,9 +109,9 @@ Stage 8: Mobile touch, perf, QA, ship build
   touch and mouse input, arbitrary window sizes, and devicePixelRatio up to 3.
 - **Performance budget.** 60 FPS on mid-range mobile; cap the backing-store DPR
   (currently 2) and avoid per-frame allocations in hot paths.
-- **Platform-safe.** No external network calls, no `eval`, no storage or SDK use
-  before Stage 8; any CrazyGames SDK access must be optional/guarded so local
-  development keeps working.
+- **Platform-safe.** No external network calls and no `eval`. Storage is
+  local-only and failure-tolerant; any CrazyGames SDK access must be
+  optional/guarded so local development keeps working.
 
 ---
 
@@ -124,13 +129,14 @@ src/world.js        procedural rooftops, gaps, and gap anchors
 src/grapple.js      anchor selection, tether constraint, release boost
 src/hud.js          screen-space score, streak, and game-over overlay
 src/particles.js    burst particles with gravity and glow
+src/save.js         guarded localStorage persistence (high score + bolts)
 ```
 
 Planned additions (introduced only when their stage begins):
 
 ```
 src/input.js        unified one-button input (keyboard/mouse/touch)
-src/scoring.js      distance, near-miss, combo, persistence
+src/scoring.js      distance, near-miss, combo
 src/audio.js        procedural WebAudio
 src/platform.js     guarded CrazyGames SDK adapter
 ```
@@ -304,3 +310,37 @@ Gameplay systems should receive explicit dependencies rather than reading global
   throughout the shake, and the console stayed empty.
 - Slow-mo, audio, hazards, persistence, and mobile polish remain for later
   stages; this stage is purely visual feedback.
+
+### Stage 6 — Save/load, bolts, menu and game over — 2026-11-18
+
+- Added `src/save.js`: `SaveManager.load()` reads `neonGrappleSave` from
+  localStorage and returns `{ highScore: 0, totalBolts: 0 }` when nothing valid
+  is stored; `save(data)` writes JSON; `addRunStats(score, boltsEarned)` folds a
+  finished run into the record (max high score, accumulated bolts) and returns
+  the updated save. Corrupt fields and storage failures are swallowed so play
+  never breaks.
+- Added `boltsPerScore: 0.05` to `CONFIG`: every 1000 score converts to 50 bolts.
+- Added `boltsEarned` to `Player`, cleared by `reset()` and recomputed each fixed
+  step from `floor(score * CONFIG.boltsPerScore)`.
+- Rebuilt `main.js` as a three-state flow: `MENU` -> `PLAYING` -> `GAMEOVER` ->
+  `MENU`. Save data loads once at startup; death calls
+  `SaveManager.addRunStats()` and refreshes the displayed totals. The starting
+  press is consumed by the state change, so it cannot also fire a tether.
+- In `MENU` the world is not rendered at all — only the background and HUD.
+  `PLAYING` draws score top-left, streak top-centre, and gold bolts top-right;
+  the FPS readout drops below the bolts counter.
+- Reworked `HUD.draw(ctx, player, width, height, gameState, saveData)`: the menu
+  shows a huge neon title, saved high score/bolts, and a sine-pulsed play
+  prompt; the game-over overlay lists the run score, `Bolts Earned: +N`, the
+  all-time best, and `Press Space to Continue`. Text scales down on narrow
+  phones.
+- Added menu, bolts, and expanded game-over styling to `CONFIG.hud`; no physics
+  constants changed.
+- Verified with 12 Node assertions covering save defaults/corruption/quota,
+  high-score/bolt accumulation, per-step bolt conversion, and all three HUD
+  layouts, plus a headless Chrome CDP run at 1280x581 that exercised Space and
+  click on every state transition, confirmed no world draw calls on the menu,
+  checked the death summary and localStorage write, and reloaded the page to
+  confirm the totals persisted. The console stayed empty.
+- Unlocks, missions, daily seeds, audio, hazards, and mobile polish remain for
+  later stages.

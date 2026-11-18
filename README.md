@@ -3,16 +3,15 @@
 A one-button grapple-swing endless runner through a neon cyberpunk city. Built
 with plain JavaScript ES modules and Canvas 2D — no dependencies, no build step.
 
-**Current state:** Stage 5 (game juice). The player auto-runs right across an
-endless chain of neon rooftops. When a gap approaches, press and hold Space,
-the left mouse button, or touch to fire a cyan tether at the yellow anchor above
-the gap, swing across, then release to land running on the far side. The body
-now tilts with its velocity and leaves a ghost trail; attaching shakes the
-screen and sprays cyan sparks, landing kicks up magenta dust and a smaller
-shake. Fall into a gap and the run ends; press Space or click to restart. The
-score climbs with distance and the streak grows while you chain swings without
-touching a rooftop. See [GAME_SPEC.md](./GAME_SPEC.md) for the concept and the
-full stage roadmap.
+**Current state:** Stage 6 (save/load, bolts, menu and game-over flow). The game
+opens on a neon Main Menu showing your saved High Score and bolt bank. Space,
+left click, or touch starts a run: auto-run right across an endless chain of
+rooftops, press and hold to swing from the yellow anchors, and release to land.
+The score climbs with distance and earns bolts (1 bolt per 20 score); the gold
+top-right counter tracks the current run. Fall into a gap to see a Game Over
+summary with the run's score, bolts earned, and all-time best. Space or click
+returns to the menu; the record is saved in localStorage and survives a reload.
+See [GAME_SPEC.md](./GAME_SPEC.md) for the concept and the full stage roadmap.
 
 ## Run locally
 
@@ -47,27 +46,28 @@ src/world.js        procedural rooftops, gaps, and gap anchors
 src/grapple.js      anchor selection, rope constraint, release boost
 src/hud.js          score, streak, and game-over screen-space overlay
 src/particles.js    glowing bursts with gravity, used for impact feedback
+src/save.js         guarded localStorage persistence (high score + bolts)
 GAME_SPEC.md        concept, stage roadmap 0–8, constraints, changelog
 README.md           this file
 ```
 
-## Verify Stage 5
+## Verify Stage 6
 
-1. Run the server and open the URL above.
-2. While auto-running, the player rectangle is level. As it falls into a gap it
-   tips forward (right side down); as a swing lifts it, it tips backward. A
-   trail of ten faint, shrinking cyan ghosts follows its every move.
-3. Fire the tether at a yellow anchor. The whole city jolts with a short screen
-   shake and cyan sparks explode at the anchor puck.
-4. Release on the far side and land on a rooftop: a smaller shake fires and
-   magenta dust kicks up at the player's feet.
-5. The score, streak, and FPS readouts stay perfectly still during every shake;
-   only the world layer moves.
-6. Fall into a gap without grappling. `GAME OVER` and `Press Space to Restart`
-   appear; particles already in the air finish settling while the world freezes.
-7. Press Space or click: shake is cleared, particles/trail are clean for the new
-   run, and the player starts again at x = 400.
-8. Resize the window: the canvas refills the viewport, the HUD remains fixed in
-   screen space, and the console stays empty.
-9. Physics, scoring, death, and restart behaviour are unchanged from Stage 4.
-   There is still no slow-mo, audio, hazard collision, or persistence.
+1. Run the server and open the URL above. The game starts on the `NEON GRAPPLE`
+   menu with `High Score: 0` and `Bolts: 0` on a fresh browser profile; no city
+   is drawn behind it and the play prompt gently pulses.
+2. Press Space or click: the run starts at x = 400 with the score at top-left,
+   the streak at top-centre, and a gold `BOLTS` counter at top-right. The FPS
+   readout sits just below the bolts counter.
+3. Let the score climb: `BOLTS` rises by roughly one per 20 score (50 per 1000).
+4. Fall into a gap without grappling. The `GAME OVER` overlay lists the run's
+   score, `Bolts Earned: +N`, and your all-time `Best`.
+5. Press Space or click on the summary: the menu returns with the High Score and
+   total Bolts updated to include the run you just finished.
+6. Refresh the browser: the menu still shows the same High Score and total
+   Bolts (stored under `neonGrappleSave` in localStorage).
+7. Resize the window: text scales down instead of clipping on narrow phones, and
+   the console stays empty.
+8. Grapple physics, particles, shake, trail, and death behaviour are unchanged
+   from Stage 5. There is still no slow-mo, audio, hazard collision, unlocks,
+   missions, or daily seed.

@@ -74,6 +74,11 @@ export const CONFIG = Object.freeze({
   /** Downward acceleration applied to particles, in pixels per second squared. */
   particleGravity: 900,
 
+  // --- Stage 6: persistence and progression tuning ---------------------------
+
+  /** Bolts awarded per score point (a score of 1000 earns 50 bolts). */
+  boltsPerScore: 0.05,
+
   render: {
     /** Backing-store pixel-ratio cap. Keeps high-DPI phones at a sane cost. */
     maxDPR: 2,
@@ -110,6 +115,34 @@ export const CONFIG = Object.freeze({
       size: 24,
       margin: 26,
     },
+    bolts: {
+      label: 'BOLTS',
+      color: '#ffcf4d',
+      glow: 'rgba(255, 207, 77, 0.75)',
+      weight: 800,
+      size: 24,
+      margin: 24,
+    },
+    menu: {
+      title: 'NEON GRAPPLE',
+      titleColor: '#35f6ff',
+      titleGlow: 'rgba(53, 246, 255, 0.85)',
+      titleWeight: 900,
+      titleSize: 92,
+      statColor: '#ffffff',
+      statGlow: 'rgba(255, 255, 255, 0.45)',
+      statWeight: 700,
+      statSize: 24,
+      prompt: 'Click or Press Space to Play',
+      promptColor: '#ff2fd0',
+      promptGlow: 'rgba(255, 47, 208, 0.8)',
+      promptWeight: 700,
+      promptSize: 24,
+      /** Prompt alpha dips by this much at the bottom of each pulse. */
+      pulseAmplitude: 0.5,
+      /** Prompt pulse speed in radians per second. */
+      pulseSpeed: 3,
+    },
     gameOver: {
       overlay: 'rgba(3, 4, 10, 0.72)',
       title: 'GAME OVER',
@@ -117,13 +150,22 @@ export const CONFIG = Object.freeze({
       titleGlow: 'rgba(255, 255, 255, 0.7)',
       titleWeight: 900,
       titleSize: 84,
-      prompt: 'Press Space to Restart',
+      /** Title and summary positions as fractions of the viewport height. */
+      titleY: 0.28,
+      detailColor: '#ffffff',
+      detailGlow: 'rgba(255, 255, 255, 0.35)',
+      detailWeight: 700,
+      detailSize: 24,
+      detailStart: 0.44,
+      detailSpacing: 0.075,
+      boltColor: '#ffcf4d',
+      bestColor: '#35f6ff',
+      prompt: 'Press Space to Continue',
       promptColor: '#35f6ff',
       promptGlow: 'rgba(53, 246, 255, 0.75)',
       promptWeight: 700,
       promptSize: 22,
-      /** Prompt offset below the title, as a fraction of viewport height. */
-      promptOffset: 0.085,
+      promptY: 0.78,
     },
   },
 });

@@ -6,6 +6,7 @@ import { World } from './world.js';
 import { Grapple } from './grapple.js';
 import { HUD } from './hud.js';
 import { ParticleSystem } from './particles.js';
+import { SaveManager } from './save.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d', { alpha: false });
@@ -39,8 +40,11 @@ const grapple = new Grapple();
 const hud = new HUD();
 const particles = new ParticleSystem();
 
-/** 'PLAYING' simulates the run; 'GAMEOVER' freezes it until a restart. */
-let gameState = 'PLAYING';
+/** Saved run records, refreshed whenever a run ends. */
+let saveData = SaveManager.load();
+
+/** 'MENU' waits for a start press; 'PLAYING' simulates; 'GAMEOVER' freezes. */
+let gameState = 'MENU';
 
 /** Tracks the airborne-to-grounded transition so landings fire juice once. */
 let wasGrounded = true;
@@ -77,10 +81,10 @@ function syncCanvasSize() {
 }
 
 function update(step) {
-  // Particles keep settling on the game-over screen; only the shake decays.
+  // Particles keep settling between runs; only the shake decays while frozen.
   particles.update(step);
 
-  // The world is frozen on the game-over screen: no physics, no streaming.
+  // No physics or streaming on the menu or game-over screen.
   if (gameState !== 'PLAYING') {
     camera.updateShake(step);
     return;
@@ -99,11 +103,13 @@ function update(step) {
   }
   wasGrounded = player.isGrounded;
 
-  // Falling past the death plane ends the run and drops the tether.
+  // Falling past the death plane ends the run, banks the result, and drops the
+  // tether. The frozen HUD then reads the freshly refreshed save data.
   if (player.y > CONFIG.deathY) {
     gameState = 'GAMEOVER';
     inputActive = false;
     if (grapple.isAttached) grapple.release(player);
+    saveData = SaveManager.addRunStats(player.score, player.boltsEarned);
     return;
   }
 
@@ -128,9 +134,9 @@ function endGrapple() {
   if (grapple.isAttached) grapple.release(player);
 }
 
-/** Wipes the run and snaps the camera back to the spawn point. */
-function restart() {
-  inputActive = false;
+/** Starts a clean run and consumes the press so it cannot also fire a tether. */
+function startRun() {
+  inputActive = true;
   wasGrounded = true;
   player.reset();
   camera.reset(player.x, player.centerY, view.height);
@@ -138,16 +144,29 @@ function restart() {
   gameState = 'PLAYING';
 }
 
+/** Returns from the summary to the menu; the banked totals stay on screen. */
+function goToMenu() {
+  inputActive = true;
+  gameState = 'MENU';
+}
+
+/** A press advances MENU -> PLAYING -> GAMEOVER -> MENU. */
+function handlePress() {
+  if (gameState === 'PLAYING') {
+    beginGrapple();
+  } else if (gameState === 'MENU') {
+    startRun();
+  } else {
+    goToMenu();
+  }
+}
+
 function onKeyDown(event) {
   if (event.code !== 'Space') return;
   // Stop Space from scrolling or activating focused controls.
   event.preventDefault();
   if (event.repeat) return;
-  if (gameState === 'GAMEOVER') {
-    restart();
-    return;
-  }
-  beginGrapple();
+  handlePress();
 }
 
 function onKeyUp(event) {
@@ -158,11 +177,7 @@ function onKeyUp(event) {
 
 function onPointerDown(event) {
   if (event.button !== 0) return;
-  if (gameState === 'GAMEOVER') {
-    restart();
-    return;
-  }
-  beginGrapple();
+  handlePress();
 }
 
 function onPointerUp(event) {
@@ -191,22 +206,28 @@ function render(alpha, frameDelta) {
   ctx.fillStyle = CONFIG.render.background;
   ctx.fillRect(0, 0, view.width, view.height);
 
-  // World, particles, tether, and player share one camera translation; the
-  // shake offset comes from camera.renderX/renderY, and the HUD stays fixed.
-  const cameraX = camera.renderX(alpha);
-  const cameraY = camera.renderY(alpha);
-  ctx.save();
-  ctx.translate(-cameraX, -cameraY);
-  world.render(ctx, cameraX, cameraY, view);
-  particles.render(ctx);
-  grapple.render(ctx, player, alpha);
-  player.render(ctx, alpha);
-  ctx.restore();
+  // The menu draws no city: only the HUD sits on top of the background.
+  if (gameState !== 'MENU') {
+    // World, particles, tether, and player share one camera translation; the
+    // shake offset comes from camera.renderX/renderY, and the HUD stays fixed.
+    const cameraX = camera.renderX(alpha);
+    const cameraY = camera.renderY(alpha);
+    ctx.save();
+    ctx.translate(-cameraX, -cameraY);
+    world.render(ctx, cameraX, cameraY, view);
+    particles.render(ctx);
+    grapple.render(ctx, player, alpha);
+    player.render(ctx, alpha);
+    ctx.restore();
+  }
 
   // HUD lives in screen space: reset to the DPR transform so it never shakes.
   ctx.setTransform(view.scaleX, 0, 0, view.scaleY, 0, 0);
-  hud.draw(ctx, player, view.width, view.height, gameState === 'GAMEOVER');
-  hud.drawFps(ctx, state.fps, view.width);
+  hud.draw(ctx, player, view.width, view.height, gameState, saveData);
+  const fpsTop = gameState === 'PLAYING'
+    ? CONFIG.hud.bolts.margin + CONFIG.hud.bolts.size + 8
+    : CONFIG.hud.fps.margin;
+  hud.drawFps(ctx, state.fps, view.width, fpsTop);
 }
 
 window.addEventListener('keydown', onKeyDown);
